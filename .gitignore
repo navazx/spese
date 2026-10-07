@@ -2,3 +2,4 @@
 backup/
 dati-*.json
 spese-backup-*.json
+.claude/
