@@ -1,5 +1,5 @@
 // Tiene l'app disponibile anche senza rete. I dati non passano da qui: li gestisce cloud.js.
-const VERSIONE = "spese-v7";
+const VERSIONE = "spese-v8";
 const BASE = ["./", "index.html", "cloud.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable.png", "apple-touch-icon.png", "mercati.json"];
 
 self.addEventListener("install", e => {

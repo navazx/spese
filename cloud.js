@@ -27,17 +27,30 @@
   function leggiOutbox(){ try{ return JSON.parse(localStorage.getItem(OUTBOX) || "{}"); }catch(_){ return {}; } }
   function scriviOutbox(o){ try{ localStorage.setItem(OUTBOX, JSON.stringify(o)); }catch(_){} }
 
+  // Google a volte risponde con una pagina d'errore ("Impossibile aprire il file", 404) anche se lo script funziona:
+  // in quel caso la stessa richiesta si ripete subito, fino a 5 volte. Scrivere due volte lo stesso documento non fa danni.
   async function chiama(azione, extra, conf = cfg){
-    const r = await fetch(conf.url, {
-      method: "POST",
-      headers: {"Content-Type": "text/plain;charset=utf-8"},   // richiesta semplice: Apps Script non gestisce il preflight
-      body: JSON.stringify({codice: conf.codice, azione, ...extra}),
-      redirect: "follow"
-    });
-    let j = null;
-    try{ j = await r.json(); }catch(_){ throw new Error("risposta"); }
-    if (!j?.ok) throw new Error(j?.errore || "errore");
-    return j;
+    let ultimo = null;
+    for (let tentativo = 0; tentativo < 5; tentativo++){
+      if (tentativo) await new Promise(r => setTimeout(r, 800 * tentativo));
+      let j = null;
+      try{
+        const r = await fetch(conf.url, {
+          method: "POST",
+          headers: {"Content-Type": "text/plain;charset=utf-8"},   // richiesta semplice: Apps Script non gestisce il preflight
+          body: JSON.stringify({codice: conf.codice, azione, ...extra}),
+          redirect: "follow"
+        });
+        j = await r.json();
+      }catch(e){ ultimo = new Error("risposta"); continue; }
+      if (!j?.ok){
+        ultimo = new Error(j?.errore || "errore");
+        if (/codice/.test(ultimo.message)) throw ultimo;          // codice sbagliato o mancante: ripetere non serve
+        continue;
+      }
+      return j;
+    }
+    throw ultimo;
   }
 
   // I prezzi arrivano da mercati.json, aggiornato ogni giorno di borsa; una quotazione scritta a mano più recente vince.
@@ -91,6 +104,7 @@
     let errore = false;
     try{
       await chiama("scrivi", {documenti: o});
+      if (o["portafoglio/spese"]) avvisa("Spese di Cashew salvate nel foglio");
       const ora = leggiOutbox();
       Object.keys(o).forEach(p => { if (uguale(ora[p], o[p])) delete ora[p]; });
       scriviOutbox(ora);
@@ -98,7 +112,7 @@
     }catch(e){
       console.error(e); errore = true;
       if (/codice errato/.test(e.message)) richiediDiNuovo();
-      ritardo = Math.min(60000, (ritardo || 4000) * 2);
+      ritardo = Math.min(30000, (ritardo || 2000) * 2);
       setTimeout(svuota, ritardo);
     }finally{
       svuotando = false;
