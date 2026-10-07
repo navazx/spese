@@ -1,4 +1,4 @@
-<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover,interactive-widget=resizes-content">
 <title>Spese e portafoglio</title>
 <meta name="theme-color" content="#2F5DA8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0F131A" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Spese"><meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -357,6 +357,46 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 .sh-btns .primary{min-width:120px}
 .sh-msg{margin:0;font-size:13px;color:var(--warn)}
 
+/* ---- colore ---- */
+/* ogni scheda ha il suo colore: spese corallo, portafoglio blu, patrimonio verde, mutuo arancio, FIRE viola */
+:root{--c-spese:#EF4E5B;--c-port:#2F6BEA;--c-patr:#0E9F7E;--c-mutuo:#E8730C;--c-fire:#7C4DFF}
+#v-spese,#tab-spese,.fab,.sheet,.sheet-bg{--tema:var(--c-spese)}
+#v-portafoglio,#tab-portafoglio{--tema:var(--c-port)}
+#v-patrimonio,#tab-patrimonio{--tema:var(--c-patr)}
+#v-mutuo,#tab-mutuo{--tema:var(--c-mutuo)}
+#v-fire,#tab-fire{--tema:var(--c-fire)}
+.view,.fab,.sheet{--accent:var(--tema);--accent-ink:#fff;--band-outer:color-mix(in srgb,var(--tema) 16%,transparent);--band-inner:color-mix(in srgb,var(--tema) 32%,transparent)}
+.view .panel{border-color:color-mix(in srgb,var(--tema) 16%,var(--line))}
+.view h2::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--tema);margin-right:9px;vertical-align:1px}
+.ms-nav h1{color:var(--tema)}
+.tabbar .ic{color:var(--tema)}
+.tabbar button[aria-selected="true"]{color:var(--tema)}
+.tabbar button[aria-selected="true"] .ic{background:color-mix(in srgb,var(--tema) 18%,transparent)}
+@media (min-width:900px){.tabbar button[aria-selected="true"]{background:color-mix(in srgb,var(--tema) 13%,transparent)}.tabbar button[aria-selected="true"] .ic{background:transparent}}
+.fab{box-shadow:0 8px 22px -6px color-mix(in srgb,var(--tema) 70%,transparent)}
+/* i riepiloghi in cima a ogni scheda */
+.ms-sum,#app > .kpis,#mutuo > .kpis,#fire > .kpis,#fp > .kpis,#spese > .kpis{
+  background:linear-gradient(135deg,var(--tema),color-mix(in srgb,var(--tema) 60%,#140a3a));border-color:transparent;color:#fff;
+  --ink:#fff;--muted:rgba(255,255,255,.84);--line:rgba(255,255,255,.24);--sunk:rgba(255,255,255,.24);--surface:transparent;
+  --pos:#fff;--neg:#FFE08A;--accent:#fff;--accent-ink:var(--tema);--ok:#fff;--ok-bg:rgba(255,255,255,.22);--warn:#FFE08A;--warn-bg:rgba(0,0,0,.2);
+  box-shadow:0 12px 26px -14px color-mix(in srgb,var(--tema) 85%,transparent)}
+.ms-sum .meter .m-sp{background:#fff}
+.ms-sum .meter .m-sp.warn,.ms-sum .meter .m-sp.over{background:#FFE08A}
+.ms-sum .meter .m-pv{background:rgba(255,255,255,.5)}
+.ms-sum .chip{background:rgba(255,255,255,.22);color:#fff}
+/* categorie */
+.cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:1px;flex:none}
+.av{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;font-weight:700;font-size:14px;color:var(--c);background:color-mix(in srgb,var(--c) 18%,transparent);flex:none}
+.mv{grid-template-columns:auto minmax(0,1fr) auto;gap:1px 12px}
+.chip-b[aria-checked="true"]{background:var(--c,var(--accent));border-color:var(--c,var(--accent));color:#fff}
+.chip-b[aria-checked="true"] .cdot{background:#fff!important}
+.chip-b[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chips.per{gap:6px}
+.chips.per .chip-b{padding:5px 11px;font-size:13px}
+.sh-head{align-items:center}
+.sh-tools{display:flex;align-items:center;gap:8px}
+.sh-tools .btn{padding:6px 12px}
+
 /* account e accesso */
 .cl-vuoto{display:flex;flex-direction:column;gap:8px;border-color:var(--accent)}
 .cl-vuoto h2{font-size:17px}
@@ -460,10 +500,13 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
     <div class="sp-grid">
       <div class="panel chart-panel">
         <div class="sec-head">
-          <div class="tabs" role="tablist" aria-label="Periodo">
-            <button type="button" role="tab" id="sp-p-12" aria-selected="true">Ultimi 12 mesi</button>
-            <button type="button" role="tab" id="sp-p-tutto" aria-selected="false">Da sempre</button>
-            <button type="button" role="tab" id="sp-p-mese" aria-selected="false" hidden>Mese</button>
+          <div class="chips per" role="tablist" aria-label="Periodo">
+            <button type="button" role="tab" class="chip-b" id="sp-p-mese" data-per="mese" aria-selected="false">Questo mese</button>
+            <button type="button" role="tab" class="chip-b" id="sp-p-3" data-per="3" aria-selected="false">3 mesi</button>
+            <button type="button" role="tab" class="chip-b" id="sp-p-6" data-per="6" aria-selected="false">6 mesi</button>
+            <button type="button" role="tab" class="chip-b" id="sp-p-12" data-per="12" aria-selected="true">12 mesi</button>
+            <button type="button" role="tab" class="chip-b" id="sp-p-anno" data-per="anno" aria-selected="false">Quest'anno</button>
+            <button type="button" role="tab" class="chip-b" id="sp-p-tutto" data-per="tutto" aria-selected="false">Da sempre</button>
           </div>
           <div class="legend-line">
             <span><i style="width:10px;height:10px;background:var(--accent);border-radius:2px"></i>uscite</span>
@@ -821,7 +864,7 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 <div class="sheet-bg" id="sh-bg" hidden></div>
 <form class="sheet" id="sh" role="dialog" aria-modal="true" aria-labelledby="sh-h" autocomplete="off" hidden>
   <span class="sh-grab" aria-hidden="true"></span>
-  <div class="al-head"><h2 id="sh-h">Nuovo movimento</h2><button type="button" class="xbtn" id="sh-x" aria-label="Chiudi">×</button></div>
+  <div class="al-head sh-head"><h2 id="sh-h">Nuovo movimento</h2><div class="sh-tools"><button type="button" class="btn danger" id="sh-del" hidden>Elimina</button><button type="button" class="xbtn" id="sh-x" aria-label="Chiudi">×</button></div></div>
   <div class="tabs" role="tablist" aria-label="Tipo">
     <button type="button" role="tab" id="sh-t-out" aria-selected="true">Uscita</button>
     <button type="button" role="tab" id="sh-t-in" aria-selected="false">Entrata</button>
@@ -836,7 +879,6 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
   <label class="toggle" for="sh-ric" id="sh-ric-l"><input type="checkbox" id="sh-ric"> Ripeti ogni mese come spesa fissa</label>
   <p class="sh-msg" id="sh-msg" hidden></p>
   <div class="btn-row sh-btns">
-    <button type="button" class="btn danger" id="sh-del" hidden>Elimina</button>
     <button type="button" class="btn" id="sh-salta" hidden>Salta questo mese</button>
     <button type="submit" class="btn primary" id="sh-ok">Salva</button>
   </div>
@@ -2134,14 +2176,19 @@ function updateSpese(){
     return;
   }
   const tutti = Object.keys(SU.mesi).sort();
-  if (spMese && !SU.mesi[spMese]){ spMese = null; if (spPeriodo === "mese") spPeriodo = "12"; }
+  if (spMese && !SU.mesi[spMese]) spMese = null;
   const ultimi12 = tutti.slice(-12);
-  const chiavi = spPeriodo === "mese" && spMese ? [spMese] : spPeriodo === "tutto" ? tutti : ultimi12;
+  const ultimo = tutti[tutti.length-1], meseSel = spMese || ultimo;
+  const chiavi = spPeriodo === "mese" ? [meseSel]
+    : spPeriodo === "3" ? tutti.slice(-3) : spPeriodo === "6" ? tutti.slice(-6)
+    : spPeriodo === "anno" ? tutti.filter(k=>k.startsWith(ultimo.slice(0,4)))
+    : spPeriodo === "tutto" ? tutti : ultimi12;
   const s = spStat(chiavi);
-  const nomePer = spPeriodo === "mese" ? meseLabel(+spMese.slice(0,4), +spMese.slice(5)-1) : spPeriodo === "tutto" ? "da sempre" : "ultimi 12 mesi";
-  ["12","tutto","mese"].forEach(p=>$("sp-p-"+p).setAttribute("aria-selected", spPeriodo === p));
-  $("sp-p-mese").hidden = !spMese;
-  if (spMese) $("sp-p-mese").textContent = meseLabel(+spMese.slice(0,4), +spMese.slice(5)-1);
+  const nomePer = spPeriodo === "mese" ? meseLabel(+meseSel.slice(0,4), +meseSel.slice(5)-1)
+    : spPeriodo === "3" ? "ultimi 3 mesi" : spPeriodo === "6" ? "ultimi 6 mesi"
+    : spPeriodo === "anno" ? "nel " + ultimo.slice(0,4) : spPeriodo === "tutto" ? "da sempre" : "ultimi 12 mesi";
+  ["mese","3","6","12","anno","tutto"].forEach(p=>$("sp-p-"+p).setAttribute("aria-selected", spPeriodo === p));
+  $("sp-p-mese").textContent = spMese && spMese !== ultimo ? meseLabel(+spMese.slice(0,4), +spMese.slice(5)-1) : "Questo mese";
 
   const nApp = Object.values(movMesi).reduce((s,M)=>s + (M?.voci?.length || 0), 0);
   $("sp-fonte").textContent = [spese?.transazioni ? `${spese.transazioni} transazioni di Cashew fino al ${dataIt(spese.aggiornato)}` : "", nApp ? `${nApp} movimenti inseriti nell'app` : "", ricorrenti.voci.length ? `${ricorrenti.voci.length} spese fisse` : ""].filter(Boolean).join(" · ");
@@ -2164,7 +2211,7 @@ function updateSpese(){
   const maxC = cats.length ? cats[0][1] : 1;
   $("sp-cats").innerHTML = cats.map(([c,v])=>`<div class="cat-row">
       <span>${esc(catNome(c))}</span>
-      <span class="bar"><i style="width:${v/maxC*100}%"></i></span>
+      <span class="bar"><i style="width:${v/maxC*100}%;background:${colCat(c)}"></i></span>
       <span class="val">${eur0.format(v)}<small>${s.n > 1 ? `${eur0.format(v/s.n)}/mese · ` : ""}${pct0(v/s.totOut)}</small></span>
     </div>`).join("") || `<p class="note">Nessuna spesa nel periodo.</p>`;
 
@@ -2222,9 +2269,7 @@ function drawSpeseChart(tutti, sel){
 
 $("spese").addEventListener("click", e=>{
   const b = e.target.closest("button"); if (!b) return;
-  if (b.id === "sp-p-12"){ spPeriodo = "12"; updateSpese(); }
-  else if (b.id === "sp-p-tutto"){ spPeriodo = "tutto"; updateSpese(); }
-  else if (b.id === "sp-p-mese"){ spPeriodo = "mese"; updateSpese(); }
+  if (b.dataset.per){ spPeriodo = b.dataset.per; if (spPeriodo !== "mese") spMese = null; updateSpese(); }
   else if (b.id === "sp-usa-fire"){
     const v = +b.dataset.valore; if (!v) return;
     fire.spesa = Math.min(80000, Math.max(6000, v));
@@ -2431,6 +2476,15 @@ $("fp").addEventListener("click", e=>{
   if (e.target.id === "fp-reset"){ fp = clone(FP_DEFAULT); syncFPForm(); updateFP(); saveFP(); toast("Valori iniziali ripristinati"); }
 });
 
+// ---- colori delle categorie: sempre gli stessi, così una categoria si riconosce a colpo d'occhio ----
+const COL_CAT = {"Casa":"#3B82F6","Bollette":"#6366F1","Spesa":"#10B981","Cibo":"#84CC16","Pranzi e ristoranti":"#F97316","Bar e drink":"#F59E0B",
+  "Macchina":"#64748B","Trasporti":"#06B6D4","Salute":"#EF4444","Cura della persona":"#EC4899","Svago e abbonamenti":"#8B5CF6","Hobby":"#A855F7",
+  "Shopping":"#E11D48","Regali":"#F43F5E","Viaggi":"#0EA5E9","Generali":"#94A3B8","Altro":"#9CA3AF","Investimenti":"#14B8A6",
+  "Stipendio e lavoro":"#16A34A","Lavoro":"#22C55E","Vendite dell'usato":"#0D9488","Regali ricevuti":"#DB2777","Buoni spesa":"#CA8A04","Altre entrate":"#65A30D"};
+const PAL_CAT = ["#EF4E5B","#F59E0B","#10B981","#3B82F6","#8B5CF6","#EC4899","#14B8A6","#F97316","#6366F1","#84CC16","#06B6D4","#E11D48"];
+function colCat(c){ if (COL_CAT[c]) return COL_CAT[c]; let x = 0; for (const ch of String(c)) x = (x*31 + ch.charCodeAt(0)) >>> 0; return PAL_CAT[x % PAL_CAT.length]; }
+const avatar = c => `<span class="av" style="--c:${colCat(c)}" aria-hidden="true">${esc(String(c).trim().charAt(0).toUpperCase() || "?")}</span>`;
+
 // ---- spese del mese (inserite nell'app) ----
 const CATS = {
   out:["Casa","Bollette","Spesa","Cibo","Pranzi e ristoranti","Bar e drink","Macchina","Trasporti","Salute","Cura della persona","Svago e abbonamenti","Hobby","Shopping","Regali","Viaggi","Generali","Altro","Investimenti"],
@@ -2612,12 +2666,12 @@ function drawBudget(t){
   if (!righe.length){ box.innerHTML = `<p class="empty">Nessuna spesa in questo mese. Quando ne aggiungi una, qui la vedi per categoria${Object.keys(budget.cat).length ? " accanto al budget" : ""}.</p>`; return; }
   const maxS = Math.max(...righe.map(x=>x.s + x.p), 1);
   box.innerHTML = righe.map(x=>{
-    if (!x.b) return `<div class="bg-row"><span class="nm">${esc(x.c)}</span><span class="amt">${eur0.format(x.s + x.p)}</span>
-      <span class="meter nob"><i class="m-sp" style="width:${(x.s + x.p)/maxS*100}%"></i></span><span class="rest">nessun budget</span></div>`;
+    if (!x.b) return `<div class="bg-row"><span class="nm"><span class="cdot" style="background:${colCat(x.c)}"></span>${esc(x.c)}</span><span class="amt">${eur0.format(x.s + x.p)}</span>
+      <span class="meter nob"><i class="m-sp" style="width:${(x.s + x.p)/maxS*100}%;background:${colCat(x.c)}"></i></span><span class="rest">nessun budget</span></div>`;
     const tot = x.s + x.p, scala = Math.max(x.b, tot), q = tot/x.b;
     const st = q > 1 ? "over" : q > .9 ? "warn" : "";
-    return `<div class="bg-row"><span class="nm">${esc(x.c)}</span><span class="amt">${eur0.format(tot)} <small>di ${eur0.format(x.b)}</small></span>
-      <span class="meter"><i class="m-sp ${st}" style="width:${x.s/scala*100}%"></i><i class="m-pv" style="width:${x.p/scala*100}%"></i></span>
+    return `<div class="bg-row"><span class="nm"><span class="cdot" style="background:${colCat(x.c)}"></span>${esc(x.c)}</span><span class="amt">${eur0.format(tot)} <small>di ${eur0.format(x.b)}</small></span>
+      <span class="meter"><i class="m-sp ${st}" style="width:${x.s/scala*100}%;${st ? "" : "background:" + colCat(x.c)}"></i><i class="m-pv" style="width:${x.p/scala*100}%"></i></span>
       <span class="rest ${st}">${q > 1 ? `${eur0.format(tot - x.b)} oltre il budget` : `restano ${eur0.format(x.b - tot)}`}${x.p ? ` · ${eur0.format(x.p)} di fisse in arrivo` : ""}</span></div>`;
   }).join("") + (Object.keys(t.inn).length ? `<p class="in-line">Entrate: ${Object.entries(t.inn).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`${esc(c)} ${eur0.format(v)}`).join(" · ")}</p>` : "");
 }
@@ -2640,7 +2694,7 @@ function drawMovimenti(M, t){
   voci.forEach(v=>{
     if (v.d !== giorno){ giorno = v.d; html += `<div class="day">${esc(etichettaGiorno(v.d))}</div>`; }
     const tags = (v.fissa ? `<span class="tag">fissa</span>` : "") + (v.d > oggi ? `<span class="tag warn">in arrivo</span>` : "") + (cut && v.d <= cut ? `<span class="tag">già in Cashew</span>` : "");
-    html += `<button type="button" class="mv" data-mv="${esc(v.id)}"><span><b>${esc(v.cat)}</b>${tags}${v.nota ? `<small>${esc(v.nota)}</small>` : ""}</span><span class="a ${v.tipo === "in" ? "pos" : ""}">${v.tipo === "in" ? "+" : "−"}${eur.format(v.imp)}</span></button>`;
+    html += `<button type="button" class="mv" data-mv="${esc(v.id)}">${avatar(v.cat)}<span><b>${esc(v.cat)}</b>${tags}${v.nota ? `<small>${esc(v.nota)}</small>` : ""}</span><span class="a ${v.tipo === "in" ? "pos" : ""}">${v.tipo === "in" ? "+" : "−"}${eur.format(v.imp)}</span></button>`;
   });
   $("ms-list").innerHTML = html;
 }
@@ -2651,7 +2705,7 @@ function drawRicorrenti(M){
   $("rc-tot").textContent = att.length ? `${eur0.format(totOut)} al mese` : "";
   $("rc-list").innerHTML = att.length ? att.map(r=>{
     const saltata = (r.salta||[]).includes(M);
-    return `<button type="button" class="mv" data-ric="${esc(r.id)}"><span><b>${esc(r.nome || r.cat)}</b>${saltata ? `<span class="tag warn">saltata questo mese</span>` : ""}<small>${esc(r.cat)} · ogni mese il giorno ${+r.giorno || 1}${r.al ? ` · fino a ${MESI_IT[+r.al.slice(5)-1]} ${r.al.slice(0,4)}` : ""}</small></span><span class="a ${r.tipo === "in" ? "pos" : ""}">${r.tipo === "in" ? "+" : "−"}${eur.format(+r.imp||0)}</span></button>`;
+    return `<button type="button" class="mv" data-ric="${esc(r.id)}">${avatar(r.cat)}<span><b>${esc(r.nome || r.cat)}</b>${saltata ? `<span class="tag warn">saltata questo mese</span>` : ""}<small>${esc(r.cat)} · ogni mese il giorno ${+r.giorno || 1}${r.al ? ` · fino a ${MESI_IT[+r.al.slice(5)-1]} ${r.al.slice(0,4)}` : ""}</small></span><span class="a ${r.tipo === "in" ? "pos" : ""}">${r.tipo === "in" ? "+" : "−"}${eur.format(+r.imp||0)}</span></button>`;
   }).join("") : `<p class="empty">Nessuna spesa fissa${ricorrenti.voci.length ? " attiva in questo mese" : " per ora"}.</p>`;
   const rata = rataMutuoQuota();
   const haMutuo = ricorrenti.voci.some(r=>r.cat === "Casa" && /mutuo/i.test(r.nome || ""));
@@ -2699,18 +2753,18 @@ function trovaVoce(id){
 function drawChips(){
   const cats = catsTutte(sh.tipo);
   if (sh.cat && !cats.includes(sh.cat)) cats.push(sh.cat);
-  $("sh-cats").innerHTML = cats.map((c,i)=>`<button type="button" class="chip-b" role="radio" id="sh-c-${i}" data-cat="${esc(c)}" aria-checked="${c === sh.cat}">${esc(c)}</button>`).join("");
+  $("sh-cats").innerHTML = cats.map((c,i)=>`<button type="button" class="chip-b" role="radio" id="sh-c-${i}" data-cat="${esc(c)}" aria-checked="${c === sh.cat}" style="--c:${colCat(c)}"><span class="cdot" style="background:${colCat(c)}"></span>${esc(c)}</button>`).join("");
   $("sh-t-out").setAttribute("aria-selected", sh.tipo === "out");
   $("sh-t-in").setAttribute("aria-selected", sh.tipo === "in");
 }
 function shMsg(t){ $("sh-msg").textContent = t || ""; $("sh-msg").hidden = !t; }
-function apriSheet(){
+function apriSheet(fuoco){
   shTrigger = document.activeElement;
   shMsg(""); $("sh-del").classList.remove("armed");
   drawChips();
   $("sh-bg").hidden = false; $("sh").hidden = false;
   document.body.style.overflow = "hidden";
-  setTimeout(()=>$("sh-imp").focus(), 30);
+  if (fuoco) setTimeout(()=>$("sh-imp").focus(), 30);   // solo per una voce nuova: modificandone una, la tastiera coprirebbe i pulsanti
 }
 function chiudiSheet(){
   $("sh-bg").hidden = true; $("sh").hidden = true; sh = null;
@@ -2729,7 +2783,7 @@ function apriMov(v){
   $("sh-ric-l").hidden = !!v; $("sh-ric").checked = false;
   $("sh-del").hidden = !v; $("sh-del").textContent = "Elimina";
   $("sh-salta").hidden = true;
-  apriSheet();
+  apriSheet(!v);
 }
 function apriRic(r, M, pre){
   const b = r || pre || {};
@@ -2745,7 +2799,7 @@ function apriRic(r, M, pre){
   const saltata = r && (r.salta||[]).includes(M);
   $("sh-salta").hidden = !r || M > meseOggi();
   $("sh-salta").textContent = saltata ? `Ripristina ${MESI_IT[+M.slice(5)-1]}` : `Salta solo ${MESI_IT[+M.slice(5)-1]}`;
-  apriSheet();
+  apriSheet(!r);
 }
 
 function salvaSheet(){
