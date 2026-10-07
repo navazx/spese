@@ -374,16 +374,12 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 .tabbar button[aria-selected="true"] .ic{background:color-mix(in srgb,var(--tema) 18%,transparent)}
 @media (min-width:900px){.tabbar button[aria-selected="true"]{background:color-mix(in srgb,var(--tema) 13%,transparent)}.tabbar button[aria-selected="true"] .ic{background:transparent}}
 .fab{box-shadow:0 8px 22px -6px color-mix(in srgb,var(--tema) 70%,transparent)}
-/* i riepiloghi in cima a ogni scheda */
-.ms-sum,#app > .kpis,#mutuo > .kpis,#fire > .kpis,#fp > .kpis,#spese > .kpis{
-  background:linear-gradient(135deg,var(--tema),color-mix(in srgb,var(--tema) 60%,#140a3a));border-color:transparent;color:#fff;
-  --ink:#fff;--muted:rgba(255,255,255,.84);--line:rgba(255,255,255,.24);--sunk:rgba(255,255,255,.24);--surface:transparent;
-  --pos:#fff;--neg:#FFE08A;--accent:#fff;--accent-ink:var(--tema);--ok:#fff;--ok-bg:rgba(255,255,255,.22);--warn:#FFE08A;--warn-bg:rgba(0,0,0,.2);
-  box-shadow:0 12px 26px -14px color-mix(in srgb,var(--tema) 85%,transparent)}
-.ms-sum .meter .m-sp{background:#fff}
-.ms-sum .meter .m-sp.warn,.ms-sum .meter .m-sp.over{background:#FFE08A}
-.ms-sum .meter .m-pv{background:rgba(255,255,255,.5)}
-.ms-sum .chip{background:rgba(255,255,255,.22);color:#fff}
+/* spese in rosso, entrate in verde */
+:root{--uscita:#D6383F;--entrata:#1C9A55}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--uscita:#FF6B6E;--entrata:#3CD07F}}
+:root[data-theme="dark"]{--uscita:#FF6B6E;--entrata:#3CD07F}
+.out-c,#ms-out,#sp-k-out{color:var(--uscita)}
+.in-c,#ms-in,#sp-k-in{color:var(--entrata)}
 /* categorie */
 .cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:1px;flex:none}
 .av{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;font-weight:700;font-size:14px;color:var(--c);background:color-mix(in srgb,var(--c) 18%,transparent);flex:none}
@@ -509,8 +505,8 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
             <button type="button" role="tab" class="chip-b" id="sp-p-tutto" data-per="tutto" aria-selected="false">Da sempre</button>
           </div>
           <div class="legend-line">
-            <span><i style="width:10px;height:10px;background:var(--accent);border-radius:2px"></i>uscite</span>
-            <span><i style="width:14px;height:2px;background:var(--ink)"></i>entrate</span>
+            <span><i style="width:10px;height:10px;background:var(--uscita);border-radius:2px"></i>uscite</span>
+            <span><i style="width:14px;height:2px;background:var(--entrata)"></i>entrate</span>
           </div>
         </div>
         <div class="chart-box" id="sp-chart-box">
@@ -2242,12 +2238,12 @@ function drawSpeseChart(tutti, sel){
   dati.forEach((d,i)=>{
     const x = mg.l + i*bw + bw*0.18, w = bw*0.64;
     const on = selSet.has(d.k);
-    g += `<rect class="bar-m" data-k="${d.k}" x="${x}" y="${y(d.o)}" width="${w}" height="${Math.max(0, y(0)-y(d.o))}" rx="3" fill="var(--accent)" opacity="${on ? 1 : .3}"${d.k===spMese && spPeriodo==="mese" ? ` stroke="var(--ink)" stroke-width="2"` : ""}/>`;
+    g += `<rect class="bar-m" data-k="${d.k}" x="${x}" y="${y(d.o)}" width="${w}" height="${Math.max(0, y(0)-y(d.o))}" rx="3" fill="var(--uscita)" opacity="${on ? 1 : .3}"${d.k===spMese && spPeriodo==="mese" ? ` stroke="var(--ink)" stroke-width="2"` : ""}/>`;
     const m = +d.k.slice(5);
     if (m === 1 || i === 0) g += `<text x="${mg.l + i*bw + bw/2}" y="${H-mg.b+16}" text-anchor="${i===0?"start":"middle"}">${m===1 ? d.k.slice(0,4) : MESI_IT[m-1]+" "+d.k.slice(2,4)}</text>`;
   });
-  g += `<path d="${dati.map((d,i)=>`${i?"L":"M"}${(mg.l + i*bw + bw/2).toFixed(1)},${y(d.i).toFixed(1)}`).join("")}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>`;
-  dati.forEach((d,i)=>{ g += `<circle cx="${mg.l + i*bw + bw/2}" cy="${y(d.i)}" r="3" fill="var(--ink)"/>`; });
+  g += `<path d="${dati.map((d,i)=>`${i?"L":"M"}${(mg.l + i*bw + bw/2).toFixed(1)},${y(d.i).toFixed(1)}`).join("")}" fill="none" stroke="var(--entrata)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  dati.forEach((d,i)=>{ g += `<circle cx="${mg.l + i*bw + bw/2}" cy="${y(d.i)}" r="3" fill="var(--entrata)"/>`; });
   g += `<rect id="sp-hit" x="${mg.l}" y="${mg.t}" width="${iw}" height="${ih}" fill="transparent" style="cursor:pointer"/>`;
   svg.innerHTML = g;
 
@@ -2256,8 +2252,8 @@ function drawSpeseChart(tutti, sel){
   hit.addEventListener("pointermove", ev=>{
     const i = idx(ev), d = dati[i], r = svg.getBoundingClientRect();
     tip.innerHTML = `<b>${meseLabel(+d.k.slice(0,4), +d.k.slice(5)-1)}</b>
-      <div class="r"><span class="muted">Entrate</span><span>${eur0.format(d.i)}</span></div>
-      <div class="r"><span class="muted">Uscite</span><span>${eur0.format(d.o)}</span></div>
+      <div class="r"><span class="muted">Entrate</span><span class="in-c">${eur0.format(d.i)}</span></div>
+      <div class="r"><span class="muted">Uscite</span><span class="out-c">${eur0.format(d.o)}</span></div>
       <div class="r"><span>Risparmio</span><b class="${d.i-d.o>=0?"pos":"neg"}">${eur0.format(d.i-d.o)}</b></div>`;
     tip.hidden = false;
     const px = (mg.l + i*bw + bw/2)/W*r.width, tw = tip.offsetWidth;
@@ -2694,7 +2690,7 @@ function drawMovimenti(M, t){
   voci.forEach(v=>{
     if (v.d !== giorno){ giorno = v.d; html += `<div class="day">${esc(etichettaGiorno(v.d))}</div>`; }
     const tags = (v.fissa ? `<span class="tag">fissa</span>` : "") + (v.d > oggi ? `<span class="tag warn">in arrivo</span>` : "") + (cut && v.d <= cut ? `<span class="tag">già in Cashew</span>` : "");
-    html += `<button type="button" class="mv" data-mv="${esc(v.id)}">${avatar(v.cat)}<span><b>${esc(v.cat)}</b>${tags}${v.nota ? `<small>${esc(v.nota)}</small>` : ""}</span><span class="a ${v.tipo === "in" ? "pos" : ""}">${v.tipo === "in" ? "+" : "−"}${eur.format(v.imp)}</span></button>`;
+    html += `<button type="button" class="mv" data-mv="${esc(v.id)}">${avatar(v.cat)}<span><b>${esc(v.cat)}</b>${tags}${v.nota ? `<small>${esc(v.nota)}</small>` : ""}</span><span class="a ${v.tipo === "in" ? "in-c" : "out-c"}">${v.tipo === "in" ? "+" : "−"}${eur.format(v.imp)}</span></button>`;
   });
   $("ms-list").innerHTML = html;
 }
@@ -2705,7 +2701,7 @@ function drawRicorrenti(M){
   $("rc-tot").textContent = att.length ? `${eur0.format(totOut)} al mese` : "";
   $("rc-list").innerHTML = att.length ? att.map(r=>{
     const saltata = (r.salta||[]).includes(M);
-    return `<button type="button" class="mv" data-ric="${esc(r.id)}">${avatar(r.cat)}<span><b>${esc(r.nome || r.cat)}</b>${saltata ? `<span class="tag warn">saltata questo mese</span>` : ""}<small>${esc(r.cat)} · ogni mese il giorno ${+r.giorno || 1}${r.al ? ` · fino a ${MESI_IT[+r.al.slice(5)-1]} ${r.al.slice(0,4)}` : ""}</small></span><span class="a ${r.tipo === "in" ? "pos" : ""}">${r.tipo === "in" ? "+" : "−"}${eur.format(+r.imp||0)}</span></button>`;
+    return `<button type="button" class="mv" data-ric="${esc(r.id)}">${avatar(r.cat)}<span><b>${esc(r.nome || r.cat)}</b>${saltata ? `<span class="tag warn">saltata questo mese</span>` : ""}<small>${esc(r.cat)} · ogni mese il giorno ${+r.giorno || 1}${r.al ? ` · fino a ${MESI_IT[+r.al.slice(5)-1]} ${r.al.slice(0,4)}` : ""}</small></span><span class="a ${r.tipo === "in" ? "in-c" : "out-c"}">${r.tipo === "in" ? "+" : "−"}${eur.format(+r.imp||0)}</span></button>`;
   }).join("") : `<p class="empty">Nessuna spesa fissa${ricorrenti.voci.length ? " attiva in questo mese" : " per ora"}.</p>`;
   const rata = rataMutuoQuota();
   const haMutuo = ricorrenti.voci.some(r=>r.cat === "Casa" && /mutuo/i.test(r.nome || ""));
@@ -2726,7 +2722,7 @@ function drawRiepilogo(){
       const a = tot(M), pm = meseAdd(M, -1), b = SU.mesi[pm] ? tot(pm) : null;
       const r = a.i - a.o, d = b && b.o > 0 && M !== oggiM ? (a.o - b.o)/b.o : null;
       return `<tr data-mese="${M}"${M === msCur ? ' class="cur"' : ""}><td><button type="button" data-mese="${M}">${MESI_IT[+M.slice(5)-1]} ${M.slice(0,4)}</button>${M === oggiM ? ` <span class="tag">in corso</span>` : ""}</td>
-        <td>${eur0.format(a.i)}</td><td>${eur0.format(a.o)}</td><td class="${r >= 0 ? "pos" : "neg"}">${eur0.format(r)}</td>
+        <td class="in-c">${eur0.format(a.i)}</td><td class="out-c">${eur0.format(a.o)}</td><td class="${r >= 0 ? "pos" : "neg"}">${eur0.format(r)}</td>
         <td>${a.i > 0 ? pct0(r/a.i) : "—"}</td><td class="${d == null ? "muted" : d > 0.005 ? "neg" : d < -0.005 ? "pos" : ""}">${d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") + pct0(Math.abs(d))}</td></tr>`;
     }).join("") + `</tbody>`;
 }
