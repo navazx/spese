@@ -2070,7 +2070,8 @@ try { const s = localStorage.getItem("pf-budget"); if (s) { const b = JSON.parse
 let SU = {mesi:{}};   // storico unito: Cashew fino alla sua ultima data, poi i movimenti dell'app
 const CAT_IT = {Groceries:"Spesa", Dining:"Pranzi e ristoranti", Food:"Cibo", Travel:"Viaggi", Entertainment:"Svago e abbonamenti",
   Gifts:"Regali", Beauty:"Cura della persona", Drink:"Bar e drink", Shopping:"Shopping", Transit:"Trasporti", Bills:"Bollette",
-  Income:"Stipendio e lavoro", Usato:"Vendite dell'usato", Regalo:"Regali ricevuti", "Buoni spesa":"Buoni spesa"};
+  Income:"Stipendio e lavoro", Usato:"Vendite dell'usato", Regalo:"Regali ricevuti", "Buoni spesa":"Buoni spesa",
+  "Bollette e tasse":"Bollette"};
 const catNome = c => CAT_IT[c] || c;
 
 function csvRows(t){
@@ -2432,8 +2433,8 @@ $("fp").addEventListener("click", e=>{
 
 // ---- spese del mese (inserite nell'app) ----
 const CATS = {
-  out:["Casa","Bollette","Spesa","Cibo","Pranzi e ristoranti","Bar e drink","Macchina","Trasporti","Salute","Cura della persona","Svago e abbonamenti","Hobby","Shopping","Regali","Viaggi","Generali","Altro"],
-  in:["Stipendio e lavoro","Vendite dell'usato","Regali ricevuti","Buoni spesa","Altre entrate"]
+  out:["Casa","Bollette","Spesa","Cibo","Pranzi e ristoranti","Bar e drink","Macchina","Trasporti","Salute","Cura della persona","Svago e abbonamenti","Hobby","Shopping","Regali","Viaggi","Generali","Altro","Investimenti"],
+  in:["Stipendio e lavoro","Lavoro","Vendite dell'usato","Regali ricevuti","Buoni spesa","Altre entrate"]
 };
 const MESI_FULL = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
 const pad2 = n => String(n).padStart(2,"0");
@@ -2464,18 +2465,26 @@ function vociMese(M){
   });
   return [...real, ...virt];
 }
+// Investimenti: soldi spostati nel portafoglio, non spese. Lavoro: sempre un'entrata.
+const CAT_INVEST = "Investimenti", CAT_SEMPRE_ENTRATA = new Set(["Lavoro"]);
 function totaliMese(M){
   const out = {}, inn = {}, prev = {}, cut = cutCashew(), oggi = isoOggi();
+  let inv = 0;
   const add = (o, c, v) => { o[c] = r2((o[c] || 0) + v); };
+  const metti = (lato, c, v) => {
+    if (c === CAT_INVEST){ inv = r2(inv + (lato === "out" ? v : -v)); return; }
+    if (CAT_SEMPRE_ENTRATA.has(c)){ add(inn, c, lato === "out" ? Math.abs(v) : v); return; }
+    add(lato === "in" ? inn : out, c, v);
+  };
   const C = spese?.mesi?.[M];
-  if (C){ for (const c in C.out) add(out, catNome(c), C.out[c]); for (const c in C.in) add(inn, catNome(c), C.in[c]); }
+  if (C){ for (const c in C.out) metti("out", catNome(c), C.out[c]); for (const c in C.in) metti("in", catNome(c), C.in[c]); }
   vociMese(M).forEach(v=>{
     if (cut && v.d <= cut) return;                       // periodo già coperto da Cashew: non la conto due volte
-    if (v.d > oggi){ if (v.tipo !== "in") add(prev, v.cat, v.imp); return; }
-    add(v.tipo === "in" ? inn : out, v.cat, v.imp);
+    if (v.d > oggi){ if (v.tipo !== "in" && v.cat !== CAT_INVEST) add(prev, v.cat, v.imp); return; }
+    metti(v.tipo === "in" ? "in" : "out", v.cat, v.imp);
   });
   const sum = o => r2(Object.values(o).reduce((a,b)=>a+b, 0));
-  return {out, inn, prev, totOut:sum(out), totIn:sum(inn), totPrev:sum(prev), cashew:!!C};
+  return {out, inn, prev, inv, totOut:sum(out), totIn:sum(inn), totPrev:sum(prev), cashew:!!C};
 }
 function primoMese(){
   const ks = [...Object.keys(spese?.mesi || {}), ...Object.keys(movMesi).filter(k=>movMesi[k]?.voci?.length), ...ricorrenti.voci.map(r=>r.dal)].filter(isMese).sort();
@@ -2541,7 +2550,7 @@ function updateMese(){
   // riepilogo
   $("ms-out-l").textContent = corrente ? "Speso finora" : "Speso";
   $("ms-out").textContent = eur0.format(t.totOut);
-  $("ms-out-s").textContent = t.totPrev > 0 ? `più ${eur0.format(t.totPrev)} di spese fisse in arrivo entro fine mese` : corrente ? `al ${new Date().getDate()} ${MESI_FULL[+M.slice(5)-1]}` : "";
+  $("ms-out-s").textContent = (t.inv > 0 ? `${eur0.format(t.inv)} investiti, non contati come spesa · ` : "") + (t.totPrev > 0 ? `più ${eur0.format(t.totPrev)} di spese fisse in arrivo entro fine mese` : corrente ? `al ${new Date().getDate()} ${MESI_FULL[+M.slice(5)-1]}` : "");
   const B = Object.values(budget.cat).reduce((s,v)=>s + (+v > 0 ? +v : 0), 0);
   const sp = t.totOut, pv = t.totPrev;
   const meter = $("ms-meter");
@@ -2591,7 +2600,7 @@ function drawBudget(t){
   const box = $("ms-cats");
   $("bg-edit").textContent = bgEdit ? "Fatto" : "Modifica budget";
   if (bgEdit){
-    const cats = catsTutte("out");
+    const cats = catsTutte("out").filter(c=>c !== CAT_INVEST);
     box.innerHTML = cats.map((c,i)=>`<div class="bg-row"><label class="nm" for="bg-in-${i}">${esc(c)}</label><span class="bg-in"><input id="bg-in-${i}" data-cat="${esc(c)}" type="text" inputmode="decimal" placeholder="—" value="${budget.cat[c] > 0 ? fmtIn(budget.cat[c]) : ""}"> €</span></div>`).join("");
     $("bg-actions").innerHTML = `<button type="button" class="btn" data-act="bg-prop">Proponi dalla media degli ultimi 6 mesi</button><button type="button" class="btn primary" data-act="bg-fine">Fatto</button>`;
     return;

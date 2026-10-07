@@ -108,20 +108,24 @@
   }
   // le scritture ravvicinate (es. un cursore trascinato) partono insieme
   let svuotaT = 0;
+  const scrittoIl = {};   // ultima modifica fatta su questo dispositivo, per documento
   function scrivi(path, data){
+    scrittoIl[path] = Date.now();
     const o = leggiOutbox(); o[path] = data; scriviOutbox(o);
     aggiornaStato();
     clearTimeout(svuotaT); svuotaT = setTimeout(svuota, 800);
   }
 
-  function applica(documenti){
+  // inizio = quando è partita la lettura: un documento modificato qui dopo quel momento è più nuovo di ciò che è arrivato
+  function applica(documenti, inizio = 0){
     const o = leggiOutbox();
+    const recente = p => scrittoIl[p] !== undefined && scrittoIl[p] >= inizio;
     const visti = new Set(Object.keys(documenti));
     Object.entries(documenti).forEach(([p, d]) => {
-      if (o[p]) return;                              // c'è una modifica locale non ancora inviata: vince quella
+      if (o[p] || recente(p)) return;                 // modifica locale più nuova: vince quella
       if (!uguale(LIVE.get(p), d)){ LIVE.set(p, d); if (caricato) avvisaListener(p); }
     });
-    [...LIVE.keys()].forEach(p => { if (!visti.has(p) && !o[p] && caricato){ LIVE.delete(p); avvisaListener(p); } });
+    [...LIVE.keys()].forEach(p => { if (!visti.has(p) && !o[p] && !recente(p) && caricato){ LIVE.delete(p); avvisaListener(p); } });
     Object.entries(o).forEach(([p, d]) => LIVE.set(p, d));
     if (!caricato){ caricato = true; avvisaTutti(); }
     ultimaLettura = Date.now();
@@ -129,8 +133,9 @@
   }
   async function ricarica(){
     if (svuotando || Object.keys(leggiOutbox()).length) await svuota();
+    const inizio = Date.now();
     const j = await chiama("leggi");
-    applica(j.documenti || {});
+    applica(j.documenti || {}, inizio);
   }
 
   async function caricaMercato(){
