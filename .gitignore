@@ -1,0 +1,4 @@
+*.bak
+backup/
+dati-*.json
+spese-backup-*.json
