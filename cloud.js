@@ -34,15 +34,20 @@
     for (let tentativo = 0; tentativo < 5; tentativo++){
       if (tentativo) await new Promise(r => setTimeout(r, 800 * tentativo));
       let j = null;
+      // sul telefono una richiesta può restare appesa (es. mentre si sceglie un file): dopo 20 s la si abbandona e si riprova
+      const stop = new AbortController();
+      const timer = setTimeout(() => stop.abort(), 20000);
       try{
         const r = await fetch(conf.url, {
           method: "POST",
           headers: {"Content-Type": "text/plain;charset=utf-8"},   // richiesta semplice: Apps Script non gestisce il preflight
           body: JSON.stringify({codice: conf.codice, azione, ...extra}),
-          redirect: "follow"
+          redirect: "follow",
+          signal: stop.signal
         });
         j = await r.json();
       }catch(e){ ultimo = new Error("risposta"); continue; }
+      finally{ clearTimeout(timer); }
       if (!j?.ok){
         ultimo = new Error(j?.errore || "errore");
         if (/codice/.test(ultimo.message)) throw ultimo;          // codice sbagliato o mancante: ripetere non serve
