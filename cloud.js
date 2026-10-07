@@ -13,6 +13,16 @@
   const uguale = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const avvisa = m => { if (typeof toast === "function") toast(m); };
 
+  // link dal foglio: #collega=<url dello script>~<codice>. Si salva sul dispositivo e sparisce dalla barra degli indirizzi.
+  (function(){
+    const m = location.hash.match(/^#collega=([^~]+)~([A-Za-z0-9]{20,})$/);
+    if (!m) return;
+    try{
+      const url = decodeURIComponent(m[1]);
+      if (/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) localStorage.setItem(CHIAVE, JSON.stringify({url, codice: m[2]}));
+    }catch(_){}
+    history.replaceState(null, "", location.pathname + "#spese");
+  })();
   function leggiCfg(){ try{ const c = JSON.parse(localStorage.getItem(CHIAVE) || "null"); return c?.url && c?.codice ? c : null; }catch(_){ return null; } }
   function leggiOutbox(){ try{ return JSON.parse(localStorage.getItem(OUTBOX) || "{}"); }catch(_){ return {}; } }
   function scriviOutbox(o){ try{ localStorage.setItem(OUTBOX, JSON.stringify(o)); }catch(_){} }
@@ -192,7 +202,7 @@
         }catch(err){
           const m = String(err?.message || "");
           mostraLogin(/codice errato/.test(m) ? "Il codice segreto non corrisponde a quello dello script."
-            : /codice da impostare/.test(m) ? "Nello script il codice segreto è ancora quello di esempio: cambialo, salva e crea una nuova versione del deployment."
+            : /codice da impostare/.test(m) ? "Lo script non ha ancora un codice segreto: nell'editor esegui la funzione prepara."
             : /fetch|network|Failed/i.test(m) ? "Non riesco a raggiungere il foglio. Controlla la connessione e che il deployment abbia accesso «Chiunque»."
             : "Collegamento non riuscito: " + m);
         }finally{

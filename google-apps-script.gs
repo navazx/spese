@@ -7,20 +7,24 @@
  * Scheda "Dati app": portafoglio, mutuo, FIRE, budget, spese fisse e storico di Cashew, in formato JSON. Non modificarla a mano.
  */
 
-// Scegli un codice lungo e difficile da indovinare (almeno 20 caratteri) e scrivilo qui.
-// Lo inserirai una volta nell'app su ogni dispositivo. Chi non lo conosce non può leggere né scrivere i tuoi dati.
-const CODICE_SEGRETO = "SCRIVI-QUI-IL-TUO-CODICE";
+// L'indirizzo dell'app installabile.
+const APP_URL = "https://navazx.github.io/spese/";
+// Il codice segreto lo genera la funzione prepara() e resta nelle proprietà dello script: non è scritto qui.
+// Chi non lo conosce non può leggere né scrivere i tuoi dati.
+function codiceSegreto() { return PropertiesService.getScriptProperties().getProperty("CODICE") || ""; }
 
 const FOGLIO_MOV = "Movimenti";
 const FOGLIO_DOC = "Dati app";
+const FOGLIO_LINK = "Collegamento";
 const INTESTAZIONE_MOV = ["Data", "Tipo", "Categoria", "Importo", "Nota", "ID"];
 const INTESTAZIONE_DOC = ["Percorso", "Dati (JSON)", "Aggiornato"];
 
 function doPost(e) {
   let req;
   try { req = JSON.parse(e.postData.contents); } catch (_) { return risposta({ok: false, errore: "richiesta non valida"}); }
-  if (CODICE_SEGRETO.length < 20 || CODICE_SEGRETO === "SCRIVI-QUI-IL-TUO-CODICE") return risposta({ok: false, errore: "codice da impostare"});
-  if (req.codice !== CODICE_SEGRETO) return risposta({ok: false, errore: "codice errato"});
+  const codice = codiceSegreto();
+  if (codice.length < 20) return risposta({ok: false, errore: "codice da impostare"});
+  if (req.codice !== codice) return risposta({ok: false, errore: "codice errato"});
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -166,8 +170,39 @@ function cancella(p) {
   if (i >= 0) sd.deleteRow(i + 2);
 }
 
-// Esegui questa funzione una volta dall'editor (menu in alto → Esegui) per creare le due schede e dare i permessi.
+// Esegui questa funzione una volta dall'editor (menu in alto → Esegui): crea le schede, il codice segreto e dà i permessi.
 function prepara() {
   foglio(FOGLIO_MOV, INTESTAZIONE_MOV);
   foglio(FOGLIO_DOC, INTESTAZIONE_DOC);
+  const p = PropertiesService.getScriptProperties();
+  if (!p.getProperty("CODICE")) p.setProperty("CODICE", (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, ""));
+  const sh = foglioLink();
+  if (!sh.getRange("B1").getValue()) sh.getRange("B3").setValue("Dopo il deployment, incolla in B1 l'URL dell'app web (finisce con /exec) e scegli App spese → Aggiorna il link.");
+}
+
+function foglioLink() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(FOGLIO_LINK);
+  if (!sh) {
+    sh = ss.insertSheet(FOGLIO_LINK);
+    sh.getRange("A1:A5").setValues([["URL dell'app web (/exec)"], [""], ["Link per collegare l'app"], [""], ["Come si usa"]]).setFontWeight("bold");
+    sh.getRange("B5").setValue("Apri il link sul computer e sul telefono (in Chrome): l'app si collega da sola a questo foglio. Non condividerlo: contiene il codice segreto.");
+    sh.setColumnWidth(1, 210); sh.setColumnWidth(2, 520);
+  }
+  return sh;
+}
+
+// Crea in B3 il link che apre l'app già collegata. Si riesegue da menu App spese → Aggiorna il link.
+function creaLink() {
+  const sh = foglioLink();
+  const url = String(sh.getRange("B1").getValue() || "").trim();
+  const codice = codiceSegreto();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) { sh.getRange("B3").setValue("In B1 serve l'URL dell'app web che finisce con /exec."); return; }
+  if (!codice) { sh.getRange("B3").setValue("Esegui prima la funzione prepara dall'editor dello script."); return; }
+  const link = APP_URL + "#collega=" + encodeURIComponent(url) + "~" + codice;
+  sh.getRange("B3").setRichTextValue(SpreadsheetApp.newRichTextValue().setText("Apri l'app collegata a questo foglio").setLinkUrl(link).build());
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu("App spese").addItem("Aggiorna il link", "creaLink").addToUi();
 }
