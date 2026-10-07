@@ -297,7 +297,18 @@
       applica(r.documenti);
     } else {
       $("cl-bar").hidden = false;
-      try{ await ricarica(); }catch(e){ console.error(e); if (/codice errato/.test(e.message)) richiediDiNuovo(); aggiornaStato(true); }
+      // il foglio a volte è lento o occupato a salvare: riprova da solo finché non risponde
+      let attesa = 3000;
+      const riprova = async () => {
+        try{ await ricarica(); aggiornaStato(); }
+        catch(e){
+          console.error(e);
+          if (/codice errato/.test(e.message)){ richiediDiNuovo(); return; }
+          aggiornaStato(true);
+          setTimeout(riprova, attesa); attesa = Math.min(60000, attesa * 2);
+        }
+      };
+      await riprova();
     }
     svuota();
     window.addEventListener("online", () => { svuota(); ricarica().catch(() => {}); });
