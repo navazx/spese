@@ -241,8 +241,24 @@
   }
   let inAttesa = null;
   async function scegliBackup(file){
+    const testo = await file.text().catch(() => "");
+    // un export CSV di Cashew scelto dal pulsante sbagliato: lo passo all'importazione di Cashew
+    const intestazione = testo.replace(/^﻿/, "").split(/\r?\n/, 1)[0].toLowerCase();
+    if (/(^|,)"?amount"?(,|$)/.test(intestazione) && intestazione.includes("category name")){
+      const input = $("sp-file");
+      if (input){
+        try{
+          const dt = new DataTransfer(); dt.items.add(file);
+          input.files = dt.files;
+          input.dispatchEvent(new Event("change", {bubbles: true}));
+          return;
+        }catch(_){}
+      }
+      avvisa("È un export di Cashew: caricalo da Spese → Andamento → Carica un CSV di Cashew");
+      return;
+    }
     try{
-      const j = JSON.parse(await file.text());
+      const j = JSON.parse(testo);
       const docs = j?.documenti;
       if (!docs || typeof docs !== "object" || !Object.keys(docs).length) throw new Error();
       inAttesa = docs;
