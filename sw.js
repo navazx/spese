@@ -1,6 +1,6 @@
 // Tiene l'app disponibile anche senza rete. I dati non passano da qui: li gestisce cloud.js.
 const VERSIONE = "spese-v1";
-const BASE = ["./", "index.html", "cloud.js", "config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable.png", "mercati.json"];
+const BASE = ["./", "index.html", "cloud.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable.png", "apple-touch-icon.png", "mercati.json"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSIONE).then(c => c.addAll(BASE)).then(() => self.skipWaiting()));

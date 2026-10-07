@@ -1,21 +1,34 @@
-// Collegamento al database cloud (Supabase).
+// Collegamento al foglio Google (tramite il suo Apps Script).
 // Offre all'app la stessa interfaccia che usava nell'artifact: db.doc(path).set/get/onSnapshot e db.collection(nome).onSnapshot.
-// Ogni documento è una riga della tabella "documenti" (user_id, path, data). Le scritture passano da una coda
-// salvata sul telefono, così funzionano anche offline e partono appena torna la connessione.
+// Le scritture passano da una coda salvata sul dispositivo, così funzionano anche offline e partono appena torna la connessione.
 (function(){
-  const CFG = window.APP_CONFIG || {};
+  const CHIAVE = "pf-cloud";
   const MERCATO = {"portafoglio/prezzi":"prezzi", "portafoglio/mercati":"mercati", "portafoglio/tassi":"tassi"};
   const OUTBOX = "pf-outbox";
   const LIVE = new Map();
   const docL = new Map(), colL = new Map();
-  let sb = null, uid = null, caricato = false, mercato = null, svuotando = false, ritardo = 0;
+  let cfg = null, caricato = false, mercato = null, svuotando = false, ritardo = 0, ultimaLettura = 0;
   const $ = id => document.getElementById(id);
   const copia = o => o === undefined ? undefined : JSON.parse(JSON.stringify(o));
   const uguale = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const avvisa = m => { if (typeof toast === "function") toast(m); };
 
+  function leggiCfg(){ try{ const c = JSON.parse(localStorage.getItem(CHIAVE) || "null"); return c?.url && c?.codice ? c : null; }catch(_){ return null; } }
   function leggiOutbox(){ try{ return JSON.parse(localStorage.getItem(OUTBOX) || "{}"); }catch(_){ return {}; } }
   function scriviOutbox(o){ try{ localStorage.setItem(OUTBOX, JSON.stringify(o)); }catch(_){} }
+
+  async function chiama(azione, extra, conf = cfg){
+    const r = await fetch(conf.url, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},   // richiesta semplice: Apps Script non gestisce il preflight
+      body: JSON.stringify({codice: conf.codice, azione, ...extra}),
+      redirect: "follow"
+    });
+    let j = null;
+    try{ j = await r.json(); }catch(_){ throw new Error("risposta"); }
+    if (!j?.ok) throw new Error(j?.errore || "errore");
+    return j;
+  }
 
   // I prezzi arrivano da mercati.json, aggiornato ogni giorno di borsa; una quotazione scritta a mano più recente vince.
   function valore(path){
@@ -51,66 +64,63 @@
     el.textContent = t;
     el.className = "cl-stato " + (ok === true ? "ok" : ok === false ? "ko" : "");
   }
-  function aggiornaStato(){
+  function aggiornaStato(errore){
+    if (!cfg) return;
     const n = Object.keys(leggiOutbox()).length;
-    if (!sb) return;
-    if (!navigator.onLine) stato(n ? `Offline · ${n} ${n === 1 ? "modifica" : "modifiche"} da inviare` : "Offline · i dati restano sul telefono", false);
-    else if (n) stato(`Invio di ${n} ${n === 1 ? "modifica" : "modifiche"}…`);
-    else stato("Sincronizzato", true);
+    if (!navigator.onLine) stato(n ? `Offline · ${n} ${n === 1 ? "modifica" : "modifiche"} da inviare` : "Offline · i dati restano sul dispositivo", false);
+    else if (errore) stato(`Il foglio non risponde · ${n} ${n === 1 ? "modifica" : "modifiche"} in attesa, riprovo da solo`, false);
+    else if (n) stato(`Salvataggio nel foglio di ${n} ${n === 1 ? "modifica" : "modifiche"}…`);
+    else stato("Sincronizzato con il foglio Google", true);
   }
 
   async function svuota(){
-    if (svuotando || !sb || !uid || !navigator.onLine) { aggiornaStato(); return; }
+    if (svuotando || !cfg || !navigator.onLine){ aggiornaStato(); return; }
     const o = leggiOutbox();
-    const righe = Object.entries(o).map(([path, data]) => ({user_id: uid, path, data, aggiornato: new Date().toISOString()}));
-    if (!righe.length){ aggiornaStato(); return; }
+    if (!Object.keys(o).length){ aggiornaStato(); return; }
     svuotando = true; aggiornaStato();
+    let errore = false;
     try{
-      const {error} = await sb.from("documenti").upsert(righe, {onConflict: "user_id,path"});
-      if (error) throw error;
+      await chiama("scrivi", {documenti: o});
       const ora = leggiOutbox();
-      righe.forEach(r => { if (uguale(ora[r.path], r.data)) delete ora[r.path]; });
+      Object.keys(o).forEach(p => { if (uguale(ora[p], o[p])) delete ora[p]; });
       scriviOutbox(ora);
       ritardo = 0;
     }catch(e){
-      console.error(e);
+      console.error(e); errore = true;
+      if (/codice errato/.test(e.message)) richiediDiNuovo();
       ritardo = Math.min(60000, (ritardo || 4000) * 2);
       setTimeout(svuota, ritardo);
     }finally{
       svuotando = false;
-      aggiornaStato();
-      if (!ritardo && Object.keys(leggiOutbox()).length) setTimeout(svuota, 300);
+      aggiornaStato(errore);
+      if (!errore && Object.keys(leggiOutbox()).length) setTimeout(svuota, 300);
     }
   }
+  // le scritture ravvicinate (es. un cursore trascinato) partono insieme
+  let svuotaT = 0;
   function scrivi(path, data){
     const o = leggiOutbox(); o[path] = data; scriviOutbox(o);
-    svuota();
+    aggiornaStato();
+    clearTimeout(svuotaT); svuotaT = setTimeout(svuota, 800);
   }
 
-  async function ricarica(){
-    const {data, error} = await sb.from("documenti").select("path,data").limit(5000);
-    if (error) throw error;
+  function applica(documenti){
     const o = leggiOutbox();
-    const visti = new Set();
-    data.forEach(r => {
-      visti.add(r.path);
-      if (o[r.path]) return;                         // c'è una modifica locale non ancora inviata: vince quella
-      if (!uguale(LIVE.get(r.path), r.data)){ LIVE.set(r.path, r.data); if (caricato) avvisaListener(r.path); }
+    const visti = new Set(Object.keys(documenti));
+    Object.entries(documenti).forEach(([p, d]) => {
+      if (o[p]) return;                              // c'è una modifica locale non ancora inviata: vince quella
+      if (!uguale(LIVE.get(p), d)){ LIVE.set(p, d); if (caricato) avvisaListener(p); }
     });
     [...LIVE.keys()].forEach(p => { if (!visti.has(p) && !o[p] && caricato){ LIVE.delete(p); avvisaListener(p); } });
     Object.entries(o).forEach(([p, d]) => LIVE.set(p, d));
     if (!caricato){ caricato = true; avvisaTutti(); }
+    ultimaLettura = Date.now();
     mostraVuoto();
   }
-  function realtime(){
-    sb.channel("documenti-" + uid)
-      .on("postgres_changes", {event: "*", schema: "public", table: "documenti", filter: `user_id=eq.${uid}`}, ev => {
-        if (ev.eventType === "DELETE"){ const p = ev.old?.path; if (p && LIVE.has(p) && !leggiOutbox()[p]){ LIVE.delete(p); avvisaListener(p); } return; }
-        const r = ev.new; if (!r?.path) return;
-        if (leggiOutbox()[r.path] || uguale(LIVE.get(r.path), r.data)) return;
-        LIVE.set(r.path, r.data); avvisaListener(r.path); mostraVuoto();
-      })
-      .subscribe();
+  async function ricarica(){
+    if (svuotando || Object.keys(leggiOutbox()).length) await svuota();
+    const j = await chiama("leggi");
+    applica(j.documenti || {});
   }
 
   async function caricaMercato(){
@@ -134,7 +144,7 @@
         async delete(){
           LIVE.delete(path); avvisaListener(path);
           const o = leggiOutbox(); delete o[path]; scriviOutbox(o);
-          if (sb && uid) await sb.from("documenti").delete().eq("user_id", uid).eq("path", path);
+          if (cfg) await chiama("cancella", {path}).catch(() => {});
         },
         onSnapshot(fn){
           let s = docL.get(path); if (!s) docL.set(path, s = new Set());
@@ -158,46 +168,45 @@
     }
   };
 
-  // ---- accesso ----
-  function mostraLogin(modo, msg){
-    const box = $("login"); if (!box) return;
-    box.hidden = false;
-    $("lg-config").hidden = modo !== "config";
-    $("lg-form").hidden = modo === "config";
+  // ---- collegamento al foglio ----
+  function mostraLogin(msg){
+    $("login").hidden = false;
     $("lg-msg").textContent = msg || "";
     $("lg-msg").hidden = !msg;
-    if (modo !== "config") setTimeout(() => $("lg-email").focus(), 50);
+    setTimeout(() => $("lg-url").focus(), 50);
   }
-  function chiediAccesso(){
+  function chiediCollegamento(msg){
     return new Promise(resolve => {
-      mostraLogin("login");
-      const form = $("lg-form");
-      let registra = false;
-      $("lg-nuovo").onclick = () => { registra = true; form.requestSubmit(); };
-      form.onsubmit = async e => {
+      mostraLogin(msg);
+      $("lg-form").onsubmit = async e => {
         e.preventDefault();
-        const email = $("lg-email").value.trim(), password = $("lg-pass").value;
-        if (!email || password.length < 8){ mostraLogin("login", "Scrivi la tua email e una password di almeno 8 caratteri."); registra = false; return; }
-        $("lg-ok").disabled = $("lg-nuovo").disabled = true;
+        const url = $("lg-url").value.trim(), codice = $("lg-codice").value.trim();
+        if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)){ mostraLogin("L'indirizzo deve essere quello dell'app web di Apps Script: inizia con https://script.google.com/macros/s/ e finisce con /exec."); return; }
+        if (codice.length < 20){ mostraLogin("Il codice segreto è quello che hai scritto nello script, di almeno 20 caratteri."); return; }
+        $("lg-ok").disabled = true; $("lg-ok").textContent = "Collegamento…";
         try{
-          const r = registra ? await sb.auth.signUp({email, password}) : await sb.auth.signInWithPassword({email, password});
-          if (r.error) throw r.error;
-          if (!r.data.session){ mostraLogin("login", "Account creato. Conferma l'indirizzo dal link che ti è arrivato per email, poi accedi qui."); return; }
-          $("login").hidden = true; $("lg-pass").value = "";
-          resolve(r.data.session);
+          const j = await chiama("leggi", {}, {url, codice});
+          try{ localStorage.setItem(CHIAVE, JSON.stringify({url, codice})); }catch(_){}
+          $("login").hidden = true; $("lg-codice").value = "";
+          resolve({conf: {url, codice}, documenti: j.documenti || {}});
         }catch(err){
           const m = String(err?.message || "");
-          mostraLogin("login", /invalid login/i.test(m) ? "Email o password sbagliate."
-            : /already registered/i.test(m) ? "Esiste già un account con questa email: tocca Accedi."
-            : /signups? not allowed|disabled/i.test(m) ? "La creazione di nuovi account è disattivata."
-            : /fetch|network/i.test(m) ? "Nessuna connessione: per il primo accesso serve internet."
-            : "Accesso non riuscito: " + m);
+          mostraLogin(/codice errato/.test(m) ? "Il codice segreto non corrisponde a quello dello script."
+            : /codice da impostare/.test(m) ? "Nello script il codice segreto è ancora quello di esempio: cambialo, salva e crea una nuova versione del deployment."
+            : /fetch|network|Failed/i.test(m) ? "Non riesco a raggiungere il foglio. Controlla la connessione e che il deployment abbia accesso «Chiunque»."
+            : "Collegamento non riuscito: " + m);
         }finally{
-          registra = false;
-          $("lg-ok").disabled = $("lg-nuovo").disabled = false;
+          $("lg-ok").disabled = false; $("lg-ok").textContent = "Collega";
         }
       };
     });
+  }
+  let giaRichiesto = false;
+  function richiediDiNuovo(){
+    if (giaRichiesto) return; giaRichiesto = true;
+    try{ localStorage.removeItem(CHIAVE); }catch(_){}
+    avvisa("Il codice segreto è cambiato: collega di nuovo il foglio");
+    setTimeout(() => location.reload(), 1500);
   }
 
   // ---- backup e account vuoto ----
@@ -242,17 +251,18 @@
     });
     scriviOutbox(o);
     ["pf-config","pf-fire","pf-alloc","pf-mutuo","pf-patr","pf-spese","pf-mov","pf-ric","pf-budget","pf-fp"].forEach(k => { try{ localStorage.removeItem(k); }catch(_){} });
+    avvisa("Importazione nel foglio in corso…");
     await svuota();
+    if (Object.keys(leggiOutbox()).length){ avvisa("Importato sul dispositivo: lo salvo nel foglio appena risponde"); return; }
     avvisa("Backup importato");
     setTimeout(() => location.reload(), 700);
   }
-  async function esci(){
-    if (Object.keys(leggiOutbox()).length && !confirmaUscita){ confirmaUscita = true; $("cl-esci").textContent = "Ci sono modifiche non inviate: tocca ancora per uscire"; return; }
-    try{ await sb?.auth.signOut(); }catch(_){}
+  let confermaUscita = false;
+  function esci(){
+    if (Object.keys(leggiOutbox()).length && !confermaUscita){ confermaUscita = true; $("cl-esci").textContent = "Ci sono modifiche non salvate nel foglio: tocca ancora per scollegare"; return; }
     try{ Object.keys(localStorage).filter(k => k.startsWith("pf-")).forEach(k => localStorage.removeItem(k)); }catch(_){}
     location.reload();
   }
-  let confirmaUscita = false;
 
   document.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
@@ -269,22 +279,24 @@
   window.avviaCloud = async function(){
     caricaMercato();
     setInterval(caricaMercato, 30 * 60 * 1000);
-    if (!CFG.supabaseUrl || !CFG.supabaseKey || !window.supabase){ mostraLogin("config"); return null; }
-    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {auth: {persistSession: true, autoRefreshToken: true, storageKey: "pf-auth"}});
-    let session = null;
-    try{ session = (await sb.auth.getSession()).data.session; }catch(_){}
-    if (!session) session = await chiediAccesso();
-    uid = session.user.id;
-    $("cl-utente").textContent = session.user.email || "";
-    $("cl-bar").hidden = false;
-    try{ await ricarica(); }catch(e){ console.error(e); }
-    realtime();
+    cfg = leggiCfg();
+    if (!cfg){
+      const r = await chiediCollegamento();
+      cfg = r.conf;
+      $("cl-bar").hidden = false;
+      applica(r.documenti);
+    } else {
+      $("cl-bar").hidden = false;
+      try{ await ricarica(); }catch(e){ console.error(e); if (/codice errato/.test(e.message)) richiediDiNuovo(); aggiornaStato(true); }
+    }
     svuota();
     window.addEventListener("online", () => { svuota(); ricarica().catch(() => {}); });
-    window.addEventListener("offline", aggiornaStato);
+    window.addEventListener("offline", () => aggiornaStato());
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible"){ caricaMercato(); if (navigator.onLine){ svuota(); ricarica().catch(() => {}); } }
+      if (document.visibilityState === "visible"){ caricaMercato(); if (navigator.onLine) ricarica().catch(() => {}); }
     });
+    // con l'app aperta, ogni 2 minuti prende le modifiche fatte dall'altro dispositivo o nel foglio
+    setInterval(() => { if (document.visibilityState === "visible" && navigator.onLine && Date.now() - ultimaLettura > 110000) ricarica().catch(() => {}); }, 30000);
     return db;
   };
 

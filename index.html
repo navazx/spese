@@ -386,7 +386,7 @@ table.goals td input.amt{width:100px}
 <div class="wrap">
   <div class="panel cl-vuoto" id="cl-vuoto" hidden>
     <h2>Il tuo account è vuoto</h2>
-    <p class="note">Importa il file di backup per ritrovare portafoglio, mutuo, FIRE e lo storico delle spese. Il primo è <b>dati-iniziali.json</b>, nella cartella backup sul computer.</p>
+    <p class="note">Importa il file di backup per ritrovare portafoglio, mutuo, FIRE e lo storico delle spese. Il primo è <b>dati-iniziali.json</b>, nella cartella backup sul computer: importalo dal PC.</p>
     <div class="btn-row"><label class="btn primary" for="cl-file2">Importa un backup</label><input type="file" id="cl-file2" accept=".json,application/json" class="sr"></div>
   </div>
   <div class="view" id="v-spese" role="tabpanel" aria-labelledby="tab-spese">
@@ -805,11 +805,11 @@ table.goals td input.amt{width:100px}
 
   <div class="foot" id="foot"></div>
   <div class="panel cl-bar" id="cl-bar" hidden>
-    <div class="cl-chi"><span class="eyebrow">Account</span><span id="cl-utente"></span><span class="cl-stato" id="cl-stato"></span></div>
+    <div class="cl-chi"><span class="eyebrow">Dati</span><span id="cl-utente">Foglio Google</span><span class="cl-stato" id="cl-stato"></span></div>
     <div class="btn-row">
       <button type="button" class="btn" id="cl-esporta">Salva un backup</button>
       <label class="btn" for="cl-file">Importa un backup</label><input type="file" id="cl-file" accept=".json,application/json" class="sr">
-      <button type="button" class="btn danger" id="cl-esci">Esci</button>
+      <button type="button" class="btn danger" id="cl-esci">Scollega questo dispositivo</button>
     </div>
   </div>
 </div>
@@ -847,18 +847,15 @@ table.goals td input.amt{width:100px}
   <div class="lg-box">
     <img src="icon-192.png" alt="" width="64" height="64">
     <h1>Spese e portafoglio</h1>
-    <form id="lg-form" autocomplete="on" hidden>
-      <label class="sh-f" for="lg-email">Email<input type="email" id="lg-email" autocomplete="username" inputmode="email" required></label>
-      <label class="sh-f" for="lg-pass">Password<input type="password" id="lg-pass" autocomplete="current-password" minlength="8" required></label>
+    <p class="note">Collega l'app al tuo foglio Google. Lo fai una volta su ogni dispositivo.</p>
+    <form id="lg-form" autocomplete="off">
+      <label class="sh-f" for="lg-url">Indirizzo dell'app web dello script<input type="url" id="lg-url" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" spellcheck="false" autocapitalize="off" required></label>
+      <label class="sh-f" for="lg-codice">Codice segreto<input type="password" id="lg-codice" autocomplete="off" spellcheck="false" autocapitalize="off" required></label>
       <p class="sh-msg" id="lg-msg" hidden></p>
-      <button type="submit" class="btn primary" id="lg-ok">Accedi</button>
-      <button type="button" class="linkbtn" id="lg-nuovo">Prima volta? Crea l'account con questa email e password</button>
+      <button type="submit" class="btn primary" id="lg-ok">Collega</button>
     </form>
-    <p class="note" id="lg-config" hidden>L'app non è ancora collegata al database: manca l'indirizzo del progetto Supabase in config.js.</p>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
-<script src="config.js"></script>
 <script src="cloud.js"></script>
 
 <script>
