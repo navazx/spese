@@ -2106,11 +2106,17 @@ try { const s = localStorage.getItem("pf-mov"); if (s) movMesi = JSON.parse(s) |
 try { const s = localStorage.getItem("pf-ric"); if (s) { const r = JSON.parse(s); if (Array.isArray(r?.voci)) ricorrenti = r; } } catch(e){}
 try { const s = localStorage.getItem("pf-budget"); if (s) { const b = JSON.parse(s); if (b?.cat) budget = b; } } catch(e){}
 let SU = {mesi:{}};   // storico unito: Cashew fino alla sua ultima data, poi i movimenti dell'app
-const CAT_IT = {Groceries:"Spesa", Dining:"Pranzi e ristoranti", Food:"Cibo", Travel:"Viaggi", Entertainment:"Svago e abbonamenti",
+const CAT_IT = {Groceries:"Spesa", Dining:"Cibo lavoro", Food:"Cibo ferie", Travel:"Viaggi", Entertainment:"Svago e abbonamenti",
   Gifts:"Regali", Beauty:"Cura della persona", Drink:"Bar e drink", Shopping:"Shopping", Transit:"Trasporti", Bills:"Bollette",
   Income:"Stipendio e lavoro", Usato:"Vendite dell'usato", Regalo:"Regali ricevuti", "Buoni spesa":"Buoni spesa",
-  "Bollette e tasse":"Bollette"};
+  "Bollette e tasse":"Bollette",
+  "Cibo":"Cibo ferie", "Pranzi e ristoranti":"Cibo lavoro"};   // nomi vecchi dell'app
 const catNome = c => CAT_IT[c] || c;
+// porta ai nomi nuovi le categorie già salvate (movimenti, spese fisse, budget)
+const normMov = m => { const o = {}; for (const k in m) o[k] = {...m[k], voci:(m[k]?.voci || []).map(v=>({...v, cat:catNome(v.cat)}))}; return o; };
+const normRic = r => ({...r, voci:(r?.voci || []).map(v=>({...v, cat:catNome(v.cat)}))});
+const normBudget = b => { const cat = {}; for (const c in b?.cat || {}) cat[catNome(c)] = Math.round(((cat[catNome(c)] || 0) + (+b.cat[c] || 0))*100)/100; return {...b, cat}; };
+movMesi = normMov(movMesi); ricorrenti = normRic(ricorrenti); budget = normBudget(budget);
 
 function csvRows(t){
   const rows = []; let r = [], f = "", q = false;
@@ -2473,7 +2479,7 @@ $("fp").addEventListener("click", e=>{
 });
 
 // ---- colori delle categorie: sempre gli stessi, così una categoria si riconosce a colpo d'occhio ----
-const COL_CAT = {"Casa":"#3B82F6","Bollette":"#6366F1","Spesa":"#10B981","Cibo":"#84CC16","Pranzi e ristoranti":"#F97316","Bar e drink":"#F59E0B",
+const COL_CAT = {"Casa":"#3B82F6","Bollette":"#6366F1","Spesa":"#10B981","Cibo ferie":"#84CC16","Cibo lavoro":"#F97316","Bar e drink":"#F59E0B",
   "Macchina":"#64748B","Trasporti":"#06B6D4","Salute":"#EF4444","Cura della persona":"#EC4899","Svago e abbonamenti":"#8B5CF6","Hobby":"#A855F7",
   "Shopping":"#E11D48","Regali":"#F43F5E","Viaggi":"#0EA5E9","Generali":"#94A3B8","Altro":"#9CA3AF","Investimenti":"#14B8A6",
   "Stipendio e lavoro":"#16A34A","Lavoro":"#22C55E","Vendite dell'usato":"#0D9488","Regali ricevuti":"#DB2777","Buoni spesa":"#CA8A04","Altre entrate":"#65A30D"};
@@ -2483,7 +2489,7 @@ const avatar = c => `<span class="av" style="--c:${colCat(c)}" aria-hidden="true
 
 // ---- spese del mese (inserite nell'app) ----
 const CATS = {
-  out:["Casa","Bollette","Spesa","Cibo","Pranzi e ristoranti","Bar e drink","Macchina","Trasporti","Salute","Cura della persona","Svago e abbonamenti","Hobby","Shopping","Regali","Viaggi","Generali","Altro","Investimenti"],
+  out:["Casa","Bollette","Spesa","Cibo ferie","Cibo lavoro","Bar e drink","Macchina","Trasporti","Salute","Cura della persona","Svago e abbonamenti","Hobby","Shopping","Regali","Viaggi","Generali","Altro","Investimenti"],
   in:["Stipendio e lavoro","Lavoro","Vendite dell'usato","Regali ricevuti","Buoni spesa","Altre entrate"]
 };
 const MESI_FULL = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
@@ -3048,21 +3054,28 @@ render();
   db.collection("movimenti").onSnapshot(snap=>{
     const m = {};
     snap.docs.forEach(d=>{ const v = d.data(); if (v && Array.isArray(v.voci)) m[d.id] = clone(v); });
+    const nm = normMov(m), vecchi = Object.keys(m).filter(k=>JSON.stringify(nm[k]) !== JSON.stringify(m[k]) && !writers["movimenti/" + k]?.busy);
+    Object.assign(m, nm);
     for (const p in writers) if (p.startsWith("movimenti/") && writers[p].busy){ const k = p.slice(10); if (movMesi[k]) m[k] = movMesi[k]; else delete m[k]; }
     if (JSON.stringify(m) === JSON.stringify(movMesi)) return;
     movMesi = m; cacheSpese(); updateSpese();
+    vecchi.forEach(salvaMese);
   }, ()=>{});
   db.doc("portafoglio/ricorrenti").onSnapshot(s=>{
     if (!s.exists || writers["portafoglio/ricorrenti"]?.busy) return;
     const d = s.data();
-    if (!Array.isArray(d?.voci) || JSON.stringify(d) === JSON.stringify(ricorrenti)) return;
-    ricorrenti = clone(d); cacheSpese(); updateSpese();
+    if (!Array.isArray(d?.voci)) return;
+    const n = normRic(clone(d)), vecchi = JSON.stringify(n) !== JSON.stringify(d);
+    if (JSON.stringify(n) !== JSON.stringify(ricorrenti)){ ricorrenti = n; cacheSpese(); updateSpese(); }
+    if (vecchi) salvaRic();
   }, ()=>{});
   db.doc("portafoglio/budget").onSnapshot(s=>{
     if (!s.exists || writers["portafoglio/budget"]?.busy || bgEdit) return;
     const d = s.data();
-    if (!d?.cat || JSON.stringify(d) === JSON.stringify(budget)) return;
-    budget = clone(d); cacheSpese(); updateMese();
+    if (!d?.cat) return;
+    const n = normBudget(clone(d)), vecchi = Object.keys(d.cat).some(c=>catNome(c) !== c);
+    if (JSON.stringify(n) !== JSON.stringify(budget)){ budget = n; cacheSpese(); updateMese(); }
+    if (vecchi) salvaBudget();
   }, ()=>{});
   db.doc("portafoglio/patrimonio").onSnapshot(s=>{
     if (!s.exists || patrDirty) return;
