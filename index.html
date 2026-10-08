@@ -287,7 +287,12 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 .icon-btn:disabled{opacity:.35;cursor:default}
 .ms-sum{display:flex;flex-direction:column;gap:12px}
 .ms-big{display:flex;flex-direction:column;gap:2px}
-.ms-big .big{font-size:36px}
+.ms-big .big{font-size:clamp(26px,8vw,36px);white-space:nowrap}
+.ms-due{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ms-due .muted{font-size:12px}
+.ms-risp{margin:0;padding-top:10px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+.ms-risp b{color:var(--ink);font-size:15px}
+.ms-risp b.pos{color:var(--pos)}.ms-risp b.neg{color:var(--neg)}
 .meter{display:flex;height:12px;border-radius:6px;background:var(--sunk);overflow:hidden}
 .meter i{display:block;height:100%}
 .meter .m-sp{background:var(--accent)}
@@ -444,14 +449,11 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
     </header>
 
     <div class="panel ms-sum">
-      <div class="ms-big"><span class="eyebrow" id="ms-out-l">Speso</span><span class="big" id="ms-out">—</span><span class="muted" id="ms-out-s"></span></div>
-      <div class="meter" id="ms-meter" role="img" aria-label="Spese rispetto al budget"></div>
-      <div class="meter-txt" id="ms-meter-t"></div>
-      <dl class="trio">
-        <div><dt>Entrate</dt><dd id="ms-in">—</dd><small id="ms-in-s"></small></div>
-        <div><dt>Risparmio</dt><dd id="ms-risp">—</dd><small id="ms-risp-s"></small></div>
-        <div><dt>Vs mese prima</dt><dd id="ms-vs">—</dd><small id="ms-vs-s"></small></div>
-      </dl>
+      <div class="ms-due">
+        <div class="ms-big"><span class="eyebrow" id="ms-out-l">Uscite</span><span class="big" id="ms-out">—</span><span class="muted" id="ms-out-s"></span></div>
+        <div class="ms-big"><span class="eyebrow">Entrate</span><span class="big" id="ms-in">—</span><span class="muted" id="ms-in-s"></span></div>
+      </div>
+      <p class="ms-risp">Risparmio <b id="ms-risp">—</b><span id="ms-risp-p"></span></p>
       <p class="ms-link" id="ms-link"></p>
     </div>
 
@@ -473,11 +475,6 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
       <div class="btn-row"><button type="button" class="btn" id="rc-add">Aggiungi spesa fissa</button><span id="rc-sugg"></span></div>
     </div>
 
-    <div class="panel ms-panel">
-      <div class="al-head"><h2>Riepilogo mese per mese</h2><span class="muted" id="rp-s"></span></div>
-      <div class="tbl-wrap"><table class="rp-tab" id="rp-tab"></table></div>
-      <div><button type="button" class="linkbtn" id="rp-all">Mostra tutti i mesi</button></div>
-    </div>
   </section>
 
   <section id="spese" aria-labelledby="sp-h">
@@ -485,7 +482,6 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
       <h2 id="sp-h">Andamento</h2>
       <div class="btn-row sp-actions">
         <span class="legend-line" id="sp-fonte"></span>
-        <label class="btn" for="sp-file">Carica un CSV di Cashew</label>
         <input type="file" id="sp-file" class="sr">
       </div>
     </div>
@@ -529,6 +525,12 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
     <div class="panel sp-fire">
       <p id="sp-fire-txt"></p>
       <button type="button" class="btn primary" id="sp-usa-fire">Usa nel calcolatore FIRE</button>
+    </div>
+
+    <div class="panel ms-panel">
+      <div class="al-head"><h2>Riepilogo mese per mese</h2><span class="muted" id="rp-s"></span></div>
+      <div class="tbl-wrap"><table class="rp-tab" id="rp-tab"></table></div>
+      <div><button type="button" class="linkbtn" id="rp-all">Mostra tutti i mesi</button></div>
     </div>
   </section>
   </div>
@@ -2180,7 +2182,7 @@ function updateSpese(){
   const vuoto = !Object.keys(SU.mesi).length;
   $("sp-usa-fire").disabled = vuoto;
   if (vuoto){
-    $("sp-fonte").textContent = "Nessun dato: aggiungi una spesa o carica il CSV esportato da Cashew";
+    $("sp-fonte").textContent = "Nessun dato: aggiungi una spesa con «Aggiungi»";
     ["sp-k-out","sp-k-in","sp-k-risp","sp-k-top"].forEach(id=>$(id).textContent = "—");
     $("sp-cats").innerHTML = `<p class="note">Qui compariranno le spese per categoria.</p>`;
     $("sp-chart").innerHTML = ""; $("sp-fire-txt").textContent = "";
@@ -2601,7 +2603,7 @@ function rataMutuoQuota(){ try{ return r2(piano(mutuo, true).rataOra * mutuo.quo
 function updateMese(){
   if (!$("ms-h")) return;
   const M = msCur, oggiM = meseOggi(), corrente = M === oggiM;
-  const t = totaliMese(M), tp = totaliMese(meseAdd(M, -1));
+  const t = totaliMese(M);
   const cut = cutCashew();
   $("ms-h").textContent = meseNome(M);
   $("ms-prev").disabled = M <= primoMese();
@@ -2613,45 +2615,17 @@ function updateMese(){
     : `${nMov} ${nMov === 1 ? "movimento inserito" : "movimenti inseriti"}`) + (db ? "" : " · salvati solo su questo dispositivo");
 
   // riepilogo
-  $("ms-out-l").textContent = corrente ? "Speso finora" : "Speso";
+  $("ms-out-l").textContent = corrente ? "Uscite finora" : "Uscite";
   $("ms-out").textContent = eur0.format(t.totOut);
   $("ms-out-s").textContent = (t.inv > 0 ? `${eur0.format(t.inv)} investiti, non contati come spesa · ` : "") + (t.totPrev > 0 ? `più ${eur0.format(t.totPrev)} di spese fisse in arrivo entro fine mese` : corrente ? `al ${new Date().getDate()} ${MESI_FULL[+M.slice(5)-1]}` : "");
-  const BM = budgetMese(M), B = Object.values(BM).reduce((s,x)=>s + x.tot, 0);
+  const BM = budgetMese(M);
   const sp = t.totOut, pv = t.totPrev;
-  const meter = $("ms-meter");
-  if (B > 0){
-    // la barra confronta il budget solo con le categorie che ce l'hanno
-    const sp = r2(Object.keys(BM).reduce((s,c)=>s + (t.out[c] || 0), 0)), pv = r2(Object.keys(BM).reduce((s,c)=>s + (t.prev[c] || 0), 0));
-    const scala = Math.max(B, sp + pv), quota = (sp + pv)/B;
-    meter.className = "meter";
-    meter.innerHTML = `<i class="m-sp${quota > 1 ? " over" : quota > .9 ? " warn" : ""}" style="width:${sp/scala*100}%"></i><i class="m-pv" style="width:${pv/scala*100}%"></i>`;
-    const resta = B - sp - pv;
-    let destra = resta >= 0 ? `restano <b>${eur0.format(resta)}</b>` : `<b class="neg">${eur0.format(-resta)} oltre il budget</b>`;
-    if (corrente && resta > 0){ const gg = giorniMese(M) - new Date().getDate() + 1; destra += ` · circa ${eur0.format(resta/gg)} al giorno per ${gg} ${gg === 1 ? "giorno" : "giorni"}`; }
-    $("ms-meter-t").innerHTML = `<span>${eur0.format(sp + pv)} di <b>${eur0.format(B)}</b> di budget${sp + pv < t.totOut + t.totPrev ? " (solo le categorie con budget)" : ""}${pv > 0 ? " (comprese le fisse in arrivo)" : ""}</span><span>${destra}</span>`;
-    meter.setAttribute("aria-label", `Speso ${eur0.format(sp)} più ${eur0.format(pv)} in arrivo su un budget di ${eur0.format(B)}`);
-  } else {
-    meter.className = "meter nob";
-    meter.innerHTML = `<i class="m-sp" style="width:${sp > 0 ? 100 : 0}%"></i>`;
-    $("ms-meter-t").innerHTML = `<span>Nessun budget impostato</span><button type="button" class="linkbtn" data-act="bg-prop">Proponi un budget dai tuoi ultimi 6 mesi</button>`;
-  }
   $("ms-in").textContent = eur0.format(t.totIn);
   $("ms-in-s").textContent = t.totIn > 0 ? Object.entries(t.inn).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([c])=>c).join(", ") : "nessuna inserita";
   const risp = t.totIn - sp - pv;
   $("ms-risp").textContent = t.totIn > 0 ? eur0.format(risp) : "—";
   $("ms-risp").className = t.totIn > 0 ? (risp >= 0 ? "pos" : "neg") : "";
-  $("ms-risp-s").textContent = t.totIn > 0 ? `${pct0(risp/t.totIn)} delle entrate${pv > 0 ? ", previsto" : ""}` : "servono le entrate";
-  if (tp.totOut > 0 && corrente){
-    // mese a metà: confronto neutro con il totale del mese scorso
-    $("ms-vs").textContent = pct0(sp/tp.totOut);
-    $("ms-vs").className = "";
-    $("ms-vs-s").textContent = `di ${MESI_IT[+meseAdd(M,-1).slice(5)-1]} (${eur0.format(tp.totOut)}) già speso`;
-  } else if (tp.totOut > 0){
-    const d = (sp + pv - tp.totOut)/tp.totOut;
-    $("ms-vs").textContent = (d > 0 ? "+" : d < 0 ? "−" : "") + pct0(Math.abs(d));
-    $("ms-vs").className = d > 0.005 ? "neg" : d < -0.005 ? "pos" : "";
-    $("ms-vs-s").textContent = `uscite · ${MESI_IT[+meseAdd(M,-1).slice(5)-1]} ${eur0.format(tp.totOut)}`;
-  } else { $("ms-vs").textContent = "—"; $("ms-vs").className = ""; $("ms-vs-s").textContent = "nessun dato"; }
+  $("ms-risp-p").textContent = t.totIn > 0 ? ` · ${pct0(risp/t.totIn)} delle entrate${pv > 0 ? ", previsto" : ""}` : " · servono le entrate";
   const vers = +fire.mensile || 0;
   $("ms-link").innerHTML = t.totIn > 0 && vers > 0
     ? `<span class="chip ${risp >= vers ? "ok" : "warn"}">${risp >= vers ? "Versamento coperto" : "Versamento non coperto"}</span><span>Nel piano FIRE investi ${eur0.format(vers)} al mese: ${risp >= vers ? `questo mese ne restano ${eur0.format(risp - vers)} in più.` : `questo mese ${risp > 0 ? `ne copri ${eur0.format(risp)}` : "il risparmio non basta"}.`}</span><button type="button" class="linkbtn" data-goto="fire">Apri FIRE</button>`
@@ -2690,7 +2664,7 @@ function drawBudget(t, BM){
     const rip = budget.riporta || {};
     box.innerHTML = `<p class="note">Scrivi il budget solo per le categorie che vuoi tenere d'occhio: le altre non compaiono qui. Con «Accumula» quello che non spendi in un mese si aggiunge al budget del mese dopo.</p>` + cats.map((c,i)=>`<div class="bg-row"><label class="nm" for="bg-in-${i}"><span class="cdot" style="background:${colCat(c)}"></span>${esc(c)}</label><span class="bg-in"><input id="bg-in-${i}" data-cat="${esc(c)}" type="text" inputmode="decimal" placeholder="—" value="${budget.cat[c] > 0 ? fmtIn(budget.cat[c]) : ""}"> €</span>
       <label class="bg-acc" id="bg-acc-${i}"${budget.cat[c] > 0 ? "" : " hidden"}><input type="checkbox" data-acc="${esc(c)}"${isMese(rip[c]) ? " checked" : ""}>Accumula il non speso nel mese dopo${isMese(rip[c]) ? ` · da ${MESI_IT[+rip[c].slice(5)-1]} ${rip[c].slice(0,4)}` : ""}</label></div>`).join("");
-    $("bg-actions").innerHTML = `<button type="button" class="btn" data-act="bg-prop">Proponi dalla media degli ultimi 6 mesi</button><button type="button" class="btn primary" data-act="bg-fine">Fatto</button>`;
+    $("bg-actions").innerHTML = `<button type="button" class="btn primary" data-act="bg-fine">Fatto</button>`;
     return;
   }
   $("bg-actions").innerHTML = "";
@@ -2759,19 +2733,6 @@ function drawRiepilogo(){
         <td class="in-c">${eur0.format(a.i)}</td><td class="out-c">${eur0.format(a.o)}</td><td class="${r >= 0 ? "pos" : "neg"}">${eur0.format(r)}</td>
         <td>${a.i > 0 ? pct0(r/a.i) : "—"}</td><td class="${d == null ? "muted" : d > 0.005 ? "neg" : d < -0.005 ? "pos" : ""}">${d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") + pct0(Math.abs(d))}</td></tr>`;
     }).join("") + `</tbody>`;
-}
-
-function proponiBudget(){
-  const oggiM = meseOggi();
-  const ks = Object.keys(SU.mesi).filter(M=>M < oggiM).sort().slice(-6);
-  if (!ks.length){ toast("Servono almeno un mese completo di spese per proporre un budget"); return; }
-  const somme = {};
-  ks.forEach(M=>{ for (const c in SU.mesi[M].out) somme[c] = (somme[c] || 0) + SU.mesi[M].out[c]; });
-  const nuovo = {};
-  for (const c in somme){ const v = Math.ceil(somme[c]/ks.length/10)*10; if (v > 0) nuovo[c] = v; }
-  budget = {...budget, cat:nuovo, aggiornato:new Date().toISOString()};
-  salvaBudget(); updateMese();
-  toast(`Budget proposto dalla media di ${ks.length} mesi: ${eur0.format(Object.values(nuovo).reduce((a,b)=>a+b, 0))} al mese`);
 }
 
 // ---- foglio per inserire e modificare ----
@@ -2931,7 +2892,6 @@ $("mese").addEventListener("click", e=>{
   if (b.id === "ms-prev"){ msCur = meseAdd(msCur, -1); updateMese(); }
   else if (b.id === "ms-next"){ msCur = meseAdd(msCur, 1); updateMese(); }
   else if (b.id === "bg-edit" || b.dataset.act === "bg-fine"){ bgEdit = !bgEdit; updateMese(); }
-  else if (b.dataset.act === "bg-prop") proponiBudget();
   else if (b.id === "rc-add") apriRic(null, msCur > meseOggi() ? meseOggi() : msCur);
   else if (b.dataset.act === "rc-mutuo") apriRic(null, msCur, {nome:"Rata del mutuo (la mia quota)", imp:rataMutuoQuota(), tipo:"out", cat:"Casa", giorno:1});
   else if (b.dataset.ric){ const r = ricorrenti.voci.find(x=>x.id === b.dataset.ric); if (r) apriRic(r, msCur); }
