@@ -373,7 +373,8 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 .view,.fab,.sheet{--accent:var(--tema);--accent-ink:#fff;--band-outer:color-mix(in srgb,var(--tema) 16%,transparent);--band-inner:color-mix(in srgb,var(--tema) 32%,transparent)}
 .view .panel{border-color:color-mix(in srgb,var(--tema) 16%,var(--line))}
 .view h2::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--tema);margin-right:9px;vertical-align:1px}
-.ms-nav h1,#ms-out-l,#ms-out{color:var(--ink)}
+.ms-nav h1,#ms-out-l{color:var(--ink)}
+#ms-out{color:var(--uscita)}
 .tabbar .ic{color:var(--tema)}
 .tabbar button[aria-selected="true"]{color:var(--tema)}
 .tabbar button[aria-selected="true"] .ic{background:color-mix(in srgb,var(--tema) 18%,transparent)}
@@ -2206,9 +2207,9 @@ function updateSpese(){
   const nApp = Object.values(movMesi).reduce((s,M)=>s + (M?.voci?.length || 0), 0);
   $("sp-fonte").textContent = [spese?.transazioni ? `${spese.transazioni} transazioni di Cashew fino al ${dataIt(spese.aggiornato)}` : "", nApp ? `${nApp} movimenti inseriti nell'app` : "", ricorrenti.voci.length ? `${ricorrenti.voci.length} spese fisse` : ""].filter(Boolean).join(" · ");
   $("sp-k-out-l").textContent = `Spese, ${nomePer}`;
-  $("sp-k-out").textContent = eur0.format(s.totOut);
+  $("sp-k-out").textContent = (s.totOut > 0 ? "−" : "") + eur0.format(s.totOut);
   $("sp-k-out-s").textContent = s.n > 1 ? `in media ${eur0.format(s.totOut/s.n)} al mese` : "nel mese";
-  $("sp-k-in").textContent = eur0.format(s.totIn);
+  $("sp-k-in").textContent = (s.totIn > 0 ? "+" : "") + eur0.format(s.totIn);
   $("sp-k-in-s").textContent = s.n > 1 ? `in media ${eur0.format(s.totIn/s.n)} al mese` : "nel mese";
   const risp = s.totIn - s.totOut, tasso = s.totIn > 0 ? risp/s.totIn : 0;
   $("sp-k-risp").textContent = eur0.format(risp);
@@ -2616,11 +2617,11 @@ function updateMese(){
 
   // riepilogo
   $("ms-out-l").textContent = corrente ? "Uscite finora" : "Uscite";
-  $("ms-out").textContent = eur0.format(t.totOut);
+  $("ms-out").textContent = (t.totOut > 0 ? "−" : "") + eur0.format(t.totOut);
   $("ms-out-s").textContent = (t.inv > 0 ? `${eur0.format(t.inv)} investiti, non contati come spesa · ` : "") + (t.totPrev > 0 ? `più ${eur0.format(t.totPrev)} di spese fisse in arrivo entro fine mese` : corrente ? `al ${new Date().getDate()} ${MESI_FULL[+M.slice(5)-1]}` : "");
   const BM = budgetMese(M);
   const sp = t.totOut, pv = t.totPrev;
-  $("ms-in").textContent = eur0.format(t.totIn);
+  $("ms-in").textContent = (t.totIn > 0 ? "+" : "") + eur0.format(t.totIn);
   $("ms-in-s").textContent = t.totIn > 0 ? Object.entries(t.inn).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([c])=>c).join(", ") : "nessuna inserita";
   const risp = t.totIn - sp - pv;
   $("ms-risp").textContent = t.totIn > 0 ? eur0.format(risp) : "—";
