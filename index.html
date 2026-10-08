@@ -389,6 +389,10 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 .chip-b[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .chips.per{gap:6px}
 .chips.per .chip-b{padding:5px 11px;font-size:13px}
+.sp-per{margin:-4px 0 0}
+.bg-acc{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-weight:500}
+.bg-acc input{width:18px;height:18px;padding:0;accent-color:var(--accent)}
+.bg-row .rest .rip{color:var(--entrata);font-weight:600}
 .sh-head{align-items:center}
 .sh-tools{display:flex;align-items:center;gap:8px}
 .sh-tools .btn{padding:6px 12px}
@@ -485,6 +489,14 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
         <input type="file" id="sp-file" class="sr">
       </div>
     </div>
+        <div class="chips per sp-per" role="tablist" aria-label="Periodo">
+          <button type="button" role="tab" class="chip-b" id="sp-p-mese" data-per="mese" aria-selected="false">Questo mese</button>
+          <button type="button" role="tab" class="chip-b" id="sp-p-3" data-per="3" aria-selected="false">3 mesi</button>
+          <button type="button" role="tab" class="chip-b" id="sp-p-6" data-per="6" aria-selected="false">6 mesi</button>
+          <button type="button" role="tab" class="chip-b" id="sp-p-12" data-per="12" aria-selected="true">12 mesi</button>
+          <button type="button" role="tab" class="chip-b" id="sp-p-anno" data-per="anno" aria-selected="false">Quest'anno</button>
+          <button type="button" role="tab" class="chip-b" id="sp-p-tutto" data-per="tutto" aria-selected="false">Da sempre</button>
+        </div>
 
     <div class="kpis fire-kpis">
       <div class="kpi"><span class="eyebrow" id="sp-k-out-l">Spese, ultimi 12 mesi</span><span class="v" id="sp-k-out">—</span><span class="s" id="sp-k-out-s">—</span></div>
@@ -496,14 +508,6 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
     <div class="sp-grid">
       <div class="panel chart-panel">
         <div class="sec-head">
-          <div class="chips per" role="tablist" aria-label="Periodo">
-            <button type="button" role="tab" class="chip-b" id="sp-p-mese" data-per="mese" aria-selected="false">Questo mese</button>
-            <button type="button" role="tab" class="chip-b" id="sp-p-3" data-per="3" aria-selected="false">3 mesi</button>
-            <button type="button" role="tab" class="chip-b" id="sp-p-6" data-per="6" aria-selected="false">6 mesi</button>
-            <button type="button" role="tab" class="chip-b" id="sp-p-12" data-per="12" aria-selected="true">12 mesi</button>
-            <button type="button" role="tab" class="chip-b" id="sp-p-anno" data-per="anno" aria-selected="false">Quest'anno</button>
-            <button type="button" role="tab" class="chip-b" id="sp-p-tutto" data-per="tutto" aria-selected="false">Da sempre</button>
-          </div>
           <div class="legend-line">
             <span><i style="width:10px;height:10px;background:var(--uscita);border-radius:2px"></i>uscite</span>
             <span><i style="width:14px;height:2px;background:var(--entrata)"></i>entrate</span>
@@ -2115,7 +2119,12 @@ const catNome = c => CAT_IT[c] || c;
 // porta ai nomi nuovi le categorie già salvate (movimenti, spese fisse, budget)
 const normMov = m => { const o = {}; for (const k in m) o[k] = {...m[k], voci:(m[k]?.voci || []).map(v=>({...v, cat:catNome(v.cat)}))}; return o; };
 const normRic = r => ({...r, voci:(r?.voci || []).map(v=>({...v, cat:catNome(v.cat)}))});
-const normBudget = b => { const cat = {}; for (const c in b?.cat || {}) cat[catNome(c)] = Math.round(((cat[catNome(c)] || 0) + (+b.cat[c] || 0))*100)/100; return {...b, cat}; };
+const normBudget = b => {
+  const cat = {}; for (const c in b?.cat || {}) cat[catNome(c)] = Math.round(((cat[catNome(c)] || 0) + (+b.cat[c] || 0))*100)/100;
+  const o = {...b, cat};
+  if (b?.riporta){ o.riporta = {}; for (const c in b.riporta) o.riporta[catNome(c)] = b.riporta[c]; }
+  return o;
+};
 movMesi = normMov(movMesi); ricorrenti = normRic(ricorrenti); budget = normBudget(budget);
 
 function csvRows(t){
@@ -2607,17 +2616,19 @@ function updateMese(){
   $("ms-out-l").textContent = corrente ? "Speso finora" : "Speso";
   $("ms-out").textContent = eur0.format(t.totOut);
   $("ms-out-s").textContent = (t.inv > 0 ? `${eur0.format(t.inv)} investiti, non contati come spesa · ` : "") + (t.totPrev > 0 ? `più ${eur0.format(t.totPrev)} di spese fisse in arrivo entro fine mese` : corrente ? `al ${new Date().getDate()} ${MESI_FULL[+M.slice(5)-1]}` : "");
-  const B = Object.values(budget.cat).reduce((s,v)=>s + (+v > 0 ? +v : 0), 0);
+  const BM = budgetMese(M), B = Object.values(BM).reduce((s,x)=>s + x.tot, 0);
   const sp = t.totOut, pv = t.totPrev;
   const meter = $("ms-meter");
   if (B > 0){
+    // la barra confronta il budget solo con le categorie che ce l'hanno
+    const sp = r2(Object.keys(BM).reduce((s,c)=>s + (t.out[c] || 0), 0)), pv = r2(Object.keys(BM).reduce((s,c)=>s + (t.prev[c] || 0), 0));
     const scala = Math.max(B, sp + pv), quota = (sp + pv)/B;
     meter.className = "meter";
     meter.innerHTML = `<i class="m-sp${quota > 1 ? " over" : quota > .9 ? " warn" : ""}" style="width:${sp/scala*100}%"></i><i class="m-pv" style="width:${pv/scala*100}%"></i>`;
     const resta = B - sp - pv;
     let destra = resta >= 0 ? `restano <b>${eur0.format(resta)}</b>` : `<b class="neg">${eur0.format(-resta)} oltre il budget</b>`;
     if (corrente && resta > 0){ const gg = giorniMese(M) - new Date().getDate() + 1; destra += ` · circa ${eur0.format(resta/gg)} al giorno per ${gg} ${gg === 1 ? "giorno" : "giorni"}`; }
-    $("ms-meter-t").innerHTML = `<span>${eur0.format(sp + pv)} di <b>${eur0.format(B)}</b> di budget${pv > 0 ? " (comprese le fisse in arrivo)" : ""}</span><span>${destra}</span>`;
+    $("ms-meter-t").innerHTML = `<span>${eur0.format(sp + pv)} di <b>${eur0.format(B)}</b> di budget${sp + pv < t.totOut + t.totPrev ? " (solo le categorie con budget)" : ""}${pv > 0 ? " (comprese le fisse in arrivo)" : ""}</span><span>${destra}</span>`;
     meter.setAttribute("aria-label", `Speso ${eur0.format(sp)} più ${eur0.format(pv)} in arrivo su un budget di ${eur0.format(B)}`);
   } else {
     meter.className = "meter nob";
@@ -2646,35 +2657,52 @@ function updateMese(){
     ? `<span class="chip ${risp >= vers ? "ok" : "warn"}">${risp >= vers ? "Versamento coperto" : "Versamento non coperto"}</span><span>Nel piano FIRE investi ${eur0.format(vers)} al mese: ${risp >= vers ? `questo mese ne restano ${eur0.format(risp - vers)} in più.` : `questo mese ${risp > 0 ? `ne copri ${eur0.format(risp)}` : "il risparmio non basta"}.`}</span><button type="button" class="linkbtn" data-goto="fire">Apri FIRE</button>`
     : `<span>Segna anche le entrate del mese per vedere se coprono il versamento di ${eur0.format(vers)} che hai messo nel piano FIRE.</span>`;
 
-  drawBudget(t);
+  drawBudget(t, BM);
   drawMovimenti(M, t);
   drawRicorrenti(M);
   drawRiepilogo();
 }
 
-function drawBudget(t){
+// budget non speso che passa al mese dopo: parte dal mese in cui hai attivato l'opzione.
+// Se un mese sfori, lo sforamento consuma prima quello che avevi messo da parte.
+function riporti(M){
+  const out = {}, rip = budget.riporta || {}, cats = Object.keys(rip).filter(c=>isMese(rip[c]) && +budget.cat[c] > 0 && rip[c] < M);
+  if (!cats.length) return out;
+  const da = cats.map(c=>rip[c]).sort()[0];
+  cats.forEach(c=>out[c] = 0);
+  for (let m = da; m < M; m = meseAdd(m, 1)){
+    const t = totaliMese(m);
+    cats.forEach(c=>{ if (m >= rip[c]) out[c] = r2(Math.max(0, out[c] + (+budget.cat[c]) - (t.out[c] || 0))); });
+  }
+  return out;
+}
+function budgetMese(M){
+  const rip = riporti(M), b = {};
+  for (const c in budget.cat) if (+budget.cat[c] > 0) b[c] = {base:+budget.cat[c], rip:rip[c] || 0, tot:r2(+budget.cat[c] + (rip[c] || 0))};
+  return b;
+}
+
+function drawBudget(t, BM){
   const box = $("ms-cats");
   $("bg-edit").textContent = bgEdit ? "Fatto" : "Modifica budget";
   if (bgEdit){
     const cats = catsTutte("out").filter(c=>c !== CAT_INVEST);
-    box.innerHTML = cats.map((c,i)=>`<div class="bg-row"><label class="nm" for="bg-in-${i}">${esc(c)}</label><span class="bg-in"><input id="bg-in-${i}" data-cat="${esc(c)}" type="text" inputmode="decimal" placeholder="—" value="${budget.cat[c] > 0 ? fmtIn(budget.cat[c]) : ""}"> €</span></div>`).join("");
+    const rip = budget.riporta || {};
+    box.innerHTML = `<p class="note">Scrivi il budget solo per le categorie che vuoi tenere d'occhio: le altre non compaiono qui. Con «Accumula» quello che non spendi in un mese si aggiunge al budget del mese dopo.</p>` + cats.map((c,i)=>`<div class="bg-row"><label class="nm" for="bg-in-${i}"><span class="cdot" style="background:${colCat(c)}"></span>${esc(c)}</label><span class="bg-in"><input id="bg-in-${i}" data-cat="${esc(c)}" type="text" inputmode="decimal" placeholder="—" value="${budget.cat[c] > 0 ? fmtIn(budget.cat[c]) : ""}"> €</span>
+      <label class="bg-acc" id="bg-acc-${i}"${budget.cat[c] > 0 ? "" : " hidden"}><input type="checkbox" data-acc="${esc(c)}"${isMese(rip[c]) ? " checked" : ""}>Accumula il non speso nel mese dopo${isMese(rip[c]) ? ` · da ${MESI_IT[+rip[c].slice(5)-1]} ${rip[c].slice(0,4)}` : ""}</label></div>`).join("");
     $("bg-actions").innerHTML = `<button type="button" class="btn" data-act="bg-prop">Proponi dalla media degli ultimi 6 mesi</button><button type="button" class="btn primary" data-act="bg-fine">Fatto</button>`;
     return;
   }
   $("bg-actions").innerHTML = "";
-  const nomi = new Set([...Object.keys(budget.cat).filter(c=>budget.cat[c] > 0), ...Object.keys(t.out), ...Object.keys(t.prev)]);
-  const righe = [...nomi].map(c=>({c, s:t.out[c] || 0, p:t.prev[c] || 0, b:+budget.cat[c] || 0}))
-    .filter(x=>x.s || x.p || x.b).sort((a,b)=>(b.s + b.p) - (a.s + a.p) || b.b - a.b);
-  if (!righe.length){ box.innerHTML = `<p class="empty">Nessuna spesa in questo mese. Quando ne aggiungi una, qui la vedi per categoria${Object.keys(budget.cat).length ? " accanto al budget" : ""}.</p>`; return; }
-  const maxS = Math.max(...righe.map(x=>x.s + x.p), 1);
+  const righe = Object.keys(BM).map(c=>({c, s:t.out[c] || 0, p:t.prev[c] || 0, b:BM[c].tot, rip:BM[c].rip}))
+    .sort((a,b)=>(b.s + b.p)/b.b - (a.s + a.p)/a.b);
+  if (!righe.length){ box.innerHTML = `<p class="empty">Nessun budget impostato. Tocca «Modifica budget» e scrivilo per le categorie che vuoi tenere d'occhio.</p>`; return; }
   box.innerHTML = righe.map(x=>{
-    if (!x.b) return `<div class="bg-row"><span class="nm"><span class="cdot" style="background:${colCat(x.c)}"></span>${esc(x.c)}</span><span class="amt">${eur0.format(x.s + x.p)}</span>
-      <span class="meter nob"><i class="m-sp" style="width:${(x.s + x.p)/maxS*100}%;background:${colCat(x.c)}"></i></span><span class="rest">nessun budget</span></div>`;
     const tot = x.s + x.p, scala = Math.max(x.b, tot), q = tot/x.b;
     const st = q > 1 ? "over" : q > .9 ? "warn" : "";
     return `<div class="bg-row"><span class="nm"><span class="cdot" style="background:${colCat(x.c)}"></span>${esc(x.c)}</span><span class="amt">${eur0.format(tot)} <small>di ${eur0.format(x.b)}</small></span>
       <span class="meter"><i class="m-sp ${st}" style="width:${x.s/scala*100}%;${st ? "" : "background:" + colCat(x.c)}"></i><i class="m-pv" style="width:${x.p/scala*100}%"></i></span>
-      <span class="rest ${st}">${q > 1 ? `${eur0.format(tot - x.b)} oltre il budget` : `restano ${eur0.format(x.b - tot)}`}${x.p ? ` · ${eur0.format(x.p)} di fisse in arrivo` : ""}</span></div>`;
+      <span class="rest ${st}">${q > 1 ? `${eur0.format(tot - x.b)} oltre il budget` : `restano ${eur0.format(x.b - tot)}`}${x.p ? ` · ${eur0.format(x.p)} di fisse in arrivo` : ""}${x.rip > 0 ? ` · <span class="rip">+${eur0.format(x.rip)} accumulati</span>` : ""}</span></div>`;
   }).join("") + (Object.keys(t.inn).length ? `<p class="in-line">Entrate: ${Object.entries(t.inn).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`${esc(c)} ${eur0.format(v)}`).join(" · ")}</p>` : "");
 }
 
@@ -2741,7 +2769,7 @@ function proponiBudget(){
   ks.forEach(M=>{ for (const c in SU.mesi[M].out) somme[c] = (somme[c] || 0) + SU.mesi[M].out[c]; });
   const nuovo = {};
   for (const c in somme){ const v = Math.ceil(somme[c]/ks.length/10)*10; if (v > 0) nuovo[c] = v; }
-  budget = {cat:nuovo, aggiornato:new Date().toISOString()};
+  budget = {...budget, cat:nuovo, aggiornato:new Date().toISOString()};
   salvaBudget(); updateMese();
   toast(`Budget proposto dalla media di ${ks.length} mesi: ${eur0.format(Object.values(nuovo).reduce((a,b)=>a+b, 0))} al mese`);
 }
@@ -2921,12 +2949,20 @@ $("rp-tab").addEventListener("click", e=>{
   msCur = tr.dataset.mese; updateMese(); $("mese").scrollIntoView({behavior:"smooth", block:"start"});
 });
 let bgT = 0;
+$("ms-cats").addEventListener("change", e=>{
+  const el = e.target; if (el.dataset.acc == null) return;
+  const riporta = {...(budget.riporta || {})};
+  if (el.checked) riporta[el.dataset.acc] = msCur > meseOggi() ? meseOggi() : msCur; else delete riporta[el.dataset.acc];
+  budget = {...budget, riporta, aggiornato:new Date().toISOString()};
+  salvaBudget(); updateMese();
+});
 $("ms-cats").addEventListener("input", e=>{
   const el = e.target; if (!el.dataset.cat) return;
   const v = parseImp(el.value);
   const cat = {...budget.cat};
   if (v > 0) cat[el.dataset.cat] = v; else delete cat[el.dataset.cat];
-  budget = {cat, aggiornato:new Date().toISOString()};
+  budget = {...budget, cat, aggiornato:new Date().toISOString()};
+  const acc = el.closest(".bg-row")?.querySelector(".bg-acc"); if (acc) acc.hidden = !(v > 0);
   clearTimeout(bgT); bgT = setTimeout(()=>{ salvaBudget(); }, 700);
 });
 
