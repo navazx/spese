@@ -403,6 +403,17 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 .sh-tools{display:flex;align-items:center;gap:8px}
 .sh-tools .btn{padding:6px 12px}
 
+/* cifre nascoste: il pulsante con l'occhio sfoca gli importi in tutte le schede */
+.occhio{position:fixed;left:16px;bottom:calc(var(--tab-h) + 20px + env(safe-area-inset-bottom,0px));z-index:21;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:grid;place-items:center;box-shadow:0 4px 14px rgba(15,19,26,.22)}
+.occhio svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.occhio .o-ch{display:none}
+.occhio[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.occhio[aria-pressed="true"] .o-ap{display:none}
+.occhio[aria-pressed="true"] .o-ch{display:inline}
+@media (min-width:900px){.occhio{bottom:28px;left:max(20px,calc(50vw - 520px))}}
+.privato .cifra,.privato svg text.cifra,.privato input[inputmode="decimal"],.privato input[inputmode="numeric"],.privato input[type="number"]{filter:blur(7px);user-select:none}
+
+
 /* account e accesso */
 .cl-vuoto{display:flex;flex-direction:column;gap:8px;border-color:var(--accent)}
 .cl-vuoto h2{font-size:17px}
@@ -862,6 +873,7 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
     </div>
   </div>
 </div>
+<button type="button" class="occhio" id="occhio" aria-pressed="false" aria-label="Nascondi le cifre"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="o-ap" d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle class="o-ap" cx="12" cy="12" r="3"/><path class="o-ch" d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.1 3.9M6.6 6.6C3.9 8.3 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button>
 <button type="button" class="fab" id="fab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Aggiungi</button>
 
 <div class="sheet-bg" id="sh-bg" hidden></div>
@@ -1042,7 +1054,7 @@ function render(){
       <tbody>
         ${c.rows.map((r,i)=>`<tr>
           <td><span class="tn"><span class="sw" style="background:${colorOf(r,cfg)}"></span><span>${esc(r.nome)}<br><span class="mono muted">${esc(r.isin)}</span></span></span></td>
-          <td>${draft?`<input id="q-${r.id}" data-i="${i}" data-k="quantita" type="number" step="any" min="0" value="${r.quantita}">`:r.quantita}</td>
+          <td>${draft?`<input id="q-${r.id}" data-i="${i}" data-k="quantita" type="number" step="any" min="0" value="${r.quantita}">`:`<span class="cifra">${r.quantita}</span>`}</td>
           <td>${draft?`<input id="pmc-${r.id}" data-i="${i}" data-k="pmc" type="number" step="any" min="0" value="${r.pmc}">`:nPrice.format(r.pmc)}</td>
           <td>${draft?`<input id="p-${r.id}" data-i="${i}" data-k="prezzo" type="number" step="any" min="0" value="${r.prezzo}">`:nPrice.format(r.prezzo)}</td>
           <td>${eur.format(r.valore)}</td>
@@ -2887,6 +2899,46 @@ $("sh-data").addEventListener("input", ()=>{
 $("sh-bg").addEventListener("click", chiudiSheet);
 document.addEventListener("keydown", e=>{ if (e.key === "Escape" && sh) chiudiSheet(); });
 $("fab").addEventListener("click", ()=>apriMov(null));
+
+// ---- cifre nascoste ----
+// Gli importi in euro vengono avvolti in <span class="cifra"> man mano che compaiono; con «privato» sono sfocati.
+const RE_CIFRA = /[−+\-]?\d[\d.,\u00a0\u202f ]*\s?k?\s?€(?:\/(?:mese|anno))?/g;
+function marcaCifre(radice){
+  if (radice.nodeType === 3) radice = radice.parentNode;
+  if (!radice || radice.nodeType !== 1 || radice.closest?.(".cifra")) return;
+  const w = document.createTreeWalker(radice, NodeFilter.SHOW_TEXT, {acceptNode: n =>
+    n.parentNode.closest(".cifra,script,style,title,textarea") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+  const nodi = []; while (w.nextNode()) nodi.push(w.currentNode);
+  nodi.forEach(n=>{
+    const t = n.nodeValue;
+    if (n.parentNode.closest("svg")){ if (/\d/.test(t)) n.parentNode.closest("text")?.classList.add("cifra"); return; }
+    RE_CIFRA.lastIndex = 0;
+    if (!RE_CIFRA.test(t)) return;
+    RE_CIFRA.lastIndex = 0;
+    const fr = document.createDocumentFragment(); let i = 0, m;
+    while ((m = RE_CIFRA.exec(t))){
+      if (m.index > i) fr.append(t.slice(i, m.index));
+      const sp = document.createElement("span"); sp.className = "cifra"; sp.textContent = m[0]; fr.append(sp);
+      i = m.index + m[0].length;
+    }
+    if (i < t.length) fr.append(t.slice(i));
+    n.replaceWith(fr);
+  });
+}
+const osservaCifre = new MutationObserver(ms=>ms.forEach(m=>{
+  if (m.type === "characterData") marcaCifre(m.target);
+  else m.addedNodes.forEach(marcaCifre);
+}));
+function privato(on){
+  document.documentElement.classList.toggle("privato", on);
+  $("occhio").setAttribute("aria-pressed", on);
+  $("occhio").setAttribute("aria-label", on ? "Mostra le cifre" : "Nascondi le cifre");
+  try{ localStorage.setItem("pf-privato", on ? "1" : ""); }catch(_){}
+  if (on){ marcaCifre(document.body); osservaCifre.observe(document.body, {childList:true, subtree:true, characterData:true}); }
+  else osservaCifre.disconnect();
+}
+$("occhio").addEventListener("click", ()=>privato(!document.documentElement.classList.contains("privato")));
+try{ if (localStorage.getItem("pf-privato") === "1") privato(true); }catch(_){}
 
 $("mese").addEventListener("click", e=>{
   const b = e.target.closest("button"); if (!b) return;
