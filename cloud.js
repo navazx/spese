@@ -101,29 +101,39 @@
     else stato("Sincronizzato con il foglio Google", true);
   }
 
-  async function svuota(){
-    if (svuotando || !cfg || !navigator.onLine){ aggiornaStato(); return; }
+  let svuotaP = null;
+  const inviatoIl = {};   // quando il foglio ha confermato l'ultima scrittura, per documento
+  function svuota(){
+    if (svuotaP) return svuotaP;                       // già in corso: chi chiama aspetta la stessa
+    if (!cfg || !navigator.onLine){ aggiornaStato(); return Promise.resolve(); }
     const o = leggiOutbox();
-    if (!Object.keys(o).length){ aggiornaStato(); return; }
+    if (!Object.keys(o).length){ aggiornaStato(); return Promise.resolve(); }
     svuotando = true; aggiornaStato();
-    let errore = false;
-    try{
-      await chiama("scrivi", {documenti: o});
-      if (o["portafoglio/spese"]) avvisa("Spese di Cashew salvate nel foglio");
-      const ora = leggiOutbox();
-      Object.keys(o).forEach(p => { if (uguale(ora[p], o[p])) delete ora[p]; });
-      scriviOutbox(ora);
-      ritardo = 0;
-    }catch(e){
-      console.error(e); errore = true;
-      if (/codice errato/.test(e.message)) richiediDiNuovo();
-      ritardo = Math.min(30000, (ritardo || 2000) * 2);
-      setTimeout(svuota, ritardo);
-    }finally{
-      svuotando = false;
-      aggiornaStato(errore);
-      if (!errore && Object.keys(leggiOutbox()).length) setTimeout(svuota, 300);
-    }
+    svuotaP = (async () => {
+      let errore = false;
+      try{
+        await chiama("scrivi", {documenti: o});
+        if (o["portafoglio/spese"]) avvisa("Spese di Cashew salvate nel foglio");
+        const ora = leggiOutbox(), adesso = Date.now();
+        Object.keys(o).forEach(p => {
+          inviatoIl[p] = adesso;
+          if (!LIVE.has(p)) LIVE.set(p, o[p]);
+          if (uguale(ora[p], o[p])) delete ora[p];
+        });
+        scriviOutbox(ora);
+        ritardo = 0;
+      }catch(e){
+        console.error(e); errore = true;
+        if (/codice errato/.test(e.message)) richiediDiNuovo();
+        ritardo = Math.min(30000, (ritardo || 2000) * 2);
+        setTimeout(svuota, ritardo);
+      }finally{
+        svuotando = false; svuotaP = null;
+        aggiornaStato(errore);
+        if (!errore && Object.keys(leggiOutbox()).length) setTimeout(svuota, 300);
+      }
+    })();
+    return svuotaP;
   }
   // le scritture ravvicinate (es. un cursore trascinato) partono insieme
   let svuotaT = 0;
@@ -138,7 +148,7 @@
   // inizio = quando è partita la lettura: un documento modificato qui dopo quel momento è più nuovo di ciò che è arrivato
   function applica(documenti, inizio = 0){
     const o = leggiOutbox();
-    const recente = p => scrittoIl[p] !== undefined && scrittoIl[p] >= inizio;
+    const recente = p => (scrittoIl[p] !== undefined && scrittoIl[p] >= inizio) || (inviatoIl[p] !== undefined && inviatoIl[p] >= inizio);
     const visti = new Set(Object.keys(documenti));
     Object.entries(documenti).forEach(([p, d]) => {
       if (o[p] || recente(p)) return;                 // modifica locale più nuova: vince quella
@@ -151,7 +161,7 @@
     mostraVuoto();
   }
   async function ricarica(){
-    if (svuotando || Object.keys(leggiOutbox()).length) await svuota();
+    await svuota();                                    // prima partono le modifiche in attesa, poi si legge
     const inizio = Date.now();
     const j = await chiama("leggi");
     applica(j.documenti || {}, inizio);
@@ -348,7 +358,7 @@
           setTimeout(riprova, attesa); attesa = Math.min(60000, attesa * 2);
         }
       };
-      await riprova();
+      riprova();   // in sottofondo: intanto l'app si usa con i dati salvati sul dispositivo
     }
     svuota();
     window.addEventListener("online", () => { svuota(); ricarica().catch(() => {}); });
