@@ -2128,9 +2128,9 @@ try { const s = localStorage.getItem("pf-budget"); if (s) { const b = JSON.parse
 let SU = {mesi:{}};   // storico unito: Cashew fino alla sua ultima data, poi i movimenti dell'app
 const CAT_IT = {Groceries:"Spesa", Dining:"Cibo lavoro", Food:"Cibo ferie", Travel:"Viaggi", Entertainment:"Svago e abbonamenti",
   Gifts:"Regali", Beauty:"Cura della persona", Drink:"Bar e drink", Shopping:"Shopping", Transit:"Trasporti", Bills:"Bollette",
-  Income:"Stipendio e lavoro", Usato:"Vendite dell'usato", Regalo:"Regali ricevuti", "Buoni spesa":"Buoni spesa",
+  Income:"Lavoro", Usato:"Vendite dell'usato", Regalo:"Regali ricevuti", "Buoni spesa":"Buoni spesa",
   "Bollette e tasse":"Bollette",
-  "Cibo":"Cibo ferie", "Pranzi e ristoranti":"Cibo lavoro"};   // nomi vecchi dell'app
+  "Cibo":"Cibo ferie", "Pranzi e ristoranti":"Cibo lavoro", "Stipendio e lavoro":"Lavoro"};   // nomi vecchi dell'app
 const catNome = c => CAT_IT[c] || c;
 // porta ai nomi nuovi le categorie già salvate (movimenti, spese fisse, budget)
 const normMov = m => { const o = {}; for (const k in m) o[k] = {...m[k], voci:(m[k]?.voci || []).map(v=>({...v, cat:catNome(v.cat)}))}; return o; };
@@ -2507,7 +2507,7 @@ $("fp").addEventListener("click", e=>{
 const COL_CAT = {"Casa":"#3B82F6","Bollette":"#6366F1","Spesa":"#10B981","Cibo ferie":"#84CC16","Cibo lavoro":"#F97316","Bar e drink":"#F59E0B",
   "Macchina":"#64748B","Trasporti":"#06B6D4","Salute":"#EF4444","Cura della persona":"#EC4899","Svago e abbonamenti":"#8B5CF6","Hobby":"#A855F7",
   "Shopping":"#E11D48","Regali":"#F43F5E","Viaggi":"#0EA5E9","Generali":"#94A3B8","Altro":"#9CA3AF","Investimenti":"#14B8A6",
-  "Stipendio e lavoro":"#16A34A","Lavoro":"#22C55E","Vendite dell'usato":"#0D9488","Regali ricevuti":"#DB2777","Buoni spesa":"#CA8A04","Altre entrate":"#65A30D"};
+  "Lavoro":"#16A34A","Vendite dell'usato":"#0D9488","Regali ricevuti":"#DB2777","Buoni spesa":"#CA8A04","Altre entrate":"#65A30D"};
 const PAL_CAT = ["#EF4E5B","#F59E0B","#10B981","#3B82F6","#8B5CF6","#EC4899","#14B8A6","#F97316","#6366F1","#84CC16","#06B6D4","#E11D48"];
 function colCat(c){ if (COL_CAT[c]) return COL_CAT[c]; let x = 0; for (const ch of String(c)) x = (x*31 + ch.charCodeAt(0)) >>> 0; return PAL_CAT[x % PAL_CAT.length]; }
 const avatar = c => `<span class="av" style="--c:${colCat(c)}" aria-hidden="true">${esc(String(c).trim().charAt(0).toUpperCase() || "?")}</span>`;
@@ -2515,7 +2515,7 @@ const avatar = c => `<span class="av" style="--c:${colCat(c)}" aria-hidden="true
 // ---- spese del mese (inserite nell'app) ----
 const CATS = {
   out:["Casa","Bollette","Spesa","Cibo ferie","Cibo lavoro","Bar e drink","Macchina","Trasporti","Salute","Cura della persona","Svago e abbonamenti","Hobby","Shopping","Regali","Viaggi","Generali","Altro","Investimenti"],
-  in:["Stipendio e lavoro","Lavoro","Vendite dell'usato","Regali ricevuti","Buoni spesa","Altre entrate"]
+  in:["Lavoro","Vendite dell'usato","Regali ricevuti","Buoni spesa","Altre entrate"]
 };
 const MESI_FULL = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
 const pad2 = n => String(n).padStart(2,"0");
