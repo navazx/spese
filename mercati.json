@@ -1,14 +1,14 @@
 {
  "prezzi": {
-  "aggiornato": "2026-10-12T17:39:08+02:00",
+  "aggiornato": "2026-10-13T17:35:28+02:00",
   "fonte": "Borsa Italiana",
   "prezzi": {
-   "bitc": 71.196,
-   "egov": 47.975,
-   "eimi": 48.735,
-   "ethe": 68.8,
-   "gagh": 48.08,
-   "swda": 132.27
+   "bitc": 71.824,
+   "egov": 48.08,
+   "eimi": 48.12,
+   "ethe": 68.594,
+   "gagh": 48.145,
+   "swda": 131.74
   }
  },
  "mercati": {
