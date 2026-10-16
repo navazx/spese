@@ -78,7 +78,8 @@
           headers: {"Content-Type": "text/plain;charset=utf-8"},   // richiesta semplice: Apps Script non gestisce il preflight
           body: corpo,
           redirect: "follow",
-          keepalive: azione === "scrivi" && corpo.length < 60000,   // la scrittura arriva al foglio anche se l'app viene chiusa
+          // app che si sta chiudendo: la richiesta parte lo stesso anche se la pagina viene fermata (solo al primo tentativo)
+          keepalive: azione === "scrivi" && !tentativo && document.visibilityState === "hidden" && corpo.length < 60000,
           signal: stop.signal
         });
         j = await r.json();
