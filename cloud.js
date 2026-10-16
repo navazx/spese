@@ -24,8 +24,42 @@
     history.replaceState(null, "", location.pathname + "#spese");
   })();
   function leggiCfg(){ try{ const c = JSON.parse(localStorage.getItem(CHIAVE) || "null"); return c?.url && c?.codice ? c : null; }catch(_){ return null; } }
-  function leggiOutbox(){ try{ return JSON.parse(localStorage.getItem(OUTBOX) || "{}"); }catch(_){ return {}; } }
-  function scriviOutbox(o){ try{ localStorage.setItem(OUTBOX, JSON.stringify(o)); }catch(_){} }
+  // La coda delle modifiche da inviare vive in memoria ed è salvata due volte: in localStorage (subito leggibile)
+  // e in IndexedDB. Su Android localStorage arriva sul disco con qualche secondo di ritardo: se l'app viene chiusa
+  // subito dopo una modifica può perderla. IndexedDB invece la scrive appena la transazione si chiude.
+  const OB_LS = (() => { try{ return JSON.parse(localStorage.getItem(OUTBOX) || "{}") || {}; }catch(_){ return {}; } })();
+  let OB = {...OB_LS};
+  function leggiOutbox(){ return {...OB}; }
+  function scriviOutbox(o){
+    OB = {...o};
+    try{ localStorage.setItem(OUTBOX, JSON.stringify(OB)); }catch(_){}
+    idbSet("outbox", OB);
+  }
+
+  // ---- IndexedDB: coda e copia completa dei dati, per aprire l'app anche senza rete ----
+  let idbP = null;
+  function idb(){
+    return idbP ||= new Promise((ok, no) => {
+      const r = indexedDB.open("spese-app", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => no(r.error);
+    });
+  }
+  async function idbGet(k){
+    try{
+      const d = await idb();
+      return await new Promise((ok, no) => { const r = d.transaction("kv").objectStore("kv").get(k); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+    }catch(_){ return undefined; }
+  }
+  function idbSet(k, v){
+    return idb().then(d => new Promise((ok, no) => {
+      const t = d.transaction("kv", "readwrite");
+      t.objectStore("kv").put(copia(v), k);
+      t.oncomplete = ok; t.onerror = t.onabort = () => no(t.error);
+    })).catch(e => console.error(e));
+  }
+  function idbVia(){ try{ idbP = null; indexedDB.deleteDatabase("spese-app"); }catch(_){} }
 
   // Google a volte risponde con una pagina d'errore ("Impossibile aprire il file", 404) anche se lo script funziona:
   // in quel caso la stessa richiesta si ripete subito, fino a 5 volte. Scrivere due volte lo stesso documento non fa danni.
@@ -38,11 +72,13 @@
       const stop = new AbortController();
       const timer = setTimeout(() => stop.abort(), 20000);
       try{
+        const corpo = JSON.stringify({codice: conf.codice, azione, ...extra});
         const r = await fetch(conf.url, {
           method: "POST",
           headers: {"Content-Type": "text/plain;charset=utf-8"},   // richiesta semplice: Apps Script non gestisce il preflight
-          body: JSON.stringify({codice: conf.codice, azione, ...extra}),
+          body: corpo,
           redirect: "follow",
+          keepalive: azione === "scrivi" && corpo.length < 60000,   // la scrittura arriva al foglio anche se l'app viene chiusa
           signal: stop.signal
         });
         j = await r.json();
@@ -101,10 +137,11 @@
     else stato("Sincronizzato con il foglio Google", true);
   }
 
-  let svuotaP = null;
+  let svuotaP = null, prontoOk = false;
   const inviatoIl = {};   // quando il foglio ha confermato l'ultima scrittura, per documento
   function svuota(){
     if (svuotaP) return svuotaP;                       // già in corso: chi chiama aspetta la stessa
+    if (!prontoOk){ return pronto.then(() => { prontoOk = true; return svuota(); }); }
     if (!cfg || !navigator.onLine){ aggiornaStato(); return Promise.resolve(); }
     const o = leggiOutbox();
     if (!Object.keys(o).length){ aggiornaStato(); return Promise.resolve(); }
@@ -121,6 +158,7 @@
           if (uguale(ora[p], o[p])) delete ora[p];
         });
         scriviOutbox(ora);
+        salvaCopia();
         ritardo = 0;
       }catch(e){
         console.error(e); errore = true;
@@ -135,15 +173,41 @@
     })();
     return svuotaP;
   }
-  // le scritture ravvicinate (es. un cursore trascinato) partono insieme
+  // le scritture ravvicinate (es. un cursore trascinato) partono insieme, dopo un attimo
   let svuotaT = 0;
   const scrittoIl = {};   // ultima modifica fatta su questo dispositivo, per documento
   function scrivi(path, data){
     scrittoIl[path] = Date.now();
     const o = leggiOutbox(); o[path] = data; scriviOutbox(o);
+    salvaCopia();
     aggiornaStato();
-    clearTimeout(svuotaT); svuotaT = setTimeout(svuota, 800);
+    clearTimeout(svuotaT); svuotaT = setTimeout(svuota, 300);
   }
+  // copia completa dei dati sul dispositivo: all'apertura l'app parte da qui, senza aspettare il foglio
+  let copiaT = 0;
+  function salvaCopia(){
+    clearTimeout(copiaT);
+    copiaT = setTimeout(() => idbSet("docs", Object.fromEntries(LIVE)), 400);
+  }
+  // all'apertura: recupera coda e copia da IndexedDB prima di parlare con il foglio
+  const pronto = (async () => {
+    const [ob, docs] = await Promise.race([
+      Promise.all([idbGet("outbox"), idbGet("docs")]),
+      new Promise(r => setTimeout(() => r([undefined, undefined]), 2500))
+    ]);
+    // coda: quella in IndexedDB è la più affidabile; le modifiche fatte in questa sessione vincono comunque
+    const unita = {...OB_LS};
+    if (ob && typeof ob === "object") Object.entries(ob).forEach(([p, d]) => { if (scrittoIl[p] === undefined && inviatoIl[p] === undefined) unita[p] = d; });
+    Object.keys(scrittoIl).forEach(p => { if (p in OB) unita[p] = OB[p]; else delete unita[p]; });
+    scriviOutbox(unita);
+    if (docs && typeof docs === "object" && Object.keys(docs).length){
+      Object.entries(docs).forEach(([p, d]) => { if (!LIVE.has(p)) LIVE.set(p, d); });
+      Object.entries(OB).forEach(([p, d]) => LIVE.set(p, d));
+      if (!caricato){ caricato = true; avvisaTutti(); }
+      mostraVuoto();
+    }
+    aggiornaStato();
+  })();
 
   // inizio = quando è partita la lettura: un documento modificato qui dopo quel momento è più nuovo di ciò che è arrivato
   function applica(documenti, inizio = 0){
@@ -158,9 +222,11 @@
     Object.entries(o).forEach(([p, d]) => LIVE.set(p, d));
     if (!caricato){ caricato = true; avvisaTutti(); }
     ultimaLettura = Date.now();
+    salvaCopia();
     mostraVuoto();
   }
   async function ricarica(){
+    await pronto;
     await svuota();                                    // prima partono le modifiche in attesa, poi si legge
     const inizio = Date.now();
     const j = await chiama("leggi");
@@ -186,7 +252,7 @@
         async set(data){ const d = copia(data); LIVE.set(path, d); avvisaListener(path); scrivi(path, d); mostraVuoto(); },
         async update(data){ const d = {...(LIVE.get(path) || {}), ...copia(data)}; LIVE.set(path, d); avvisaListener(path); scrivi(path, d); },
         async delete(){
-          LIVE.delete(path); avvisaListener(path);
+          LIVE.delete(path); avvisaListener(path); salvaCopia();
           const o = leggiOutbox(); delete o[path]; scriviOutbox(o);
           if (cfg) await chiama("cancella", {path}).catch(() => {});
         },
@@ -311,17 +377,20 @@
     });
     scriviOutbox(o);
     ["pf-config","pf-fire","pf-alloc","pf-mutuo","pf-patr","pf-spese","pf-mov","pf-ric","pf-budget","pf-fp"].forEach(k => { try{ localStorage.removeItem(k); }catch(_){} });
+    salvaCopia();
     avvisa("Importazione nel foglio in corso…");
     await svuota();
     if (Object.keys(leggiOutbox()).length){ avvisa("Importato sul dispositivo: lo salvo nel foglio appena risponde"); return; }
     avvisa("Backup importato");
+    clearTimeout(copiaT); await idbSet("docs", Object.fromEntries(LIVE));
     setTimeout(() => location.reload(), 700);
   }
   let confermaUscita = false;
   function esci(){
     if (Object.keys(leggiOutbox()).length && !confermaUscita){ confermaUscita = true; $("cl-esci").textContent = "Ci sono modifiche non salvate nel foglio: tocca ancora per scollegare"; return; }
     try{ Object.keys(localStorage).filter(k => k.startsWith("pf-")).forEach(k => localStorage.removeItem(k)); }catch(_){}
-    location.reload();
+    OB = {}; idbVia();
+    setTimeout(() => location.reload(), 300);
   }
 
   document.addEventListener("click", e => {
@@ -365,7 +434,9 @@
     window.addEventListener("offline", () => aggiornaStato());
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible"){ caricaMercato(); if (navigator.onLine) ricarica().catch(() => {}); }
+      else { clearTimeout(svuotaT); clearTimeout(copiaT); idbSet("docs", Object.fromEntries(LIVE)); svuota(); }   // si chiude o va in secondo piano: invia subito
     });
+    window.addEventListener("pagehide", () => { clearTimeout(svuotaT); svuota(); });
     // con l'app aperta, ogni 2 minuti prende le modifiche fatte dall'altro dispositivo o nel foglio
     setInterval(() => { if (document.visibilityState === "visible" && navigator.onLine && Date.now() - ultimaLettura > 110000) ricarica().catch(() => {}); }, 30000);
     return db;
