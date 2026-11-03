@@ -923,6 +923,7 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 // ---- dati di partenza (sovrascritti da quelli salvati) ----
 const DEFAULT_CONFIG = {
   soglia: 2,
+  sogliaRel: 25,
   strumenti: [
     {id:"swda", nome:"iShares Core MSCI World UCITS ETF USD (Acc)", isin:"IE00B4L5Y983", ticker:"SWDA", classe:"azioni", quantita:0, pmc:0, target:63},
     {id:"eimi", nome:"iShares Core MSCI EM IMI UCITS ETF USD (Acc)", isin:"IE00BKM4GZ66", ticker:"EIMI", classe:"azioni", quantita:0, pmc:0, target:8},
@@ -1008,6 +1009,13 @@ function rebalance(c){
   return rows.map((r,i)=>({r, eurDelta: alloc[i], quote: Math.floor(alloc[i]/r.prezzo)}));
 }
 
+// fuori soglia: scarto oltre i punti fissati oppure oltre una quota del suo target, così contano anche i target piccoli
+const fuoriSoglia = (r, cfg) => {
+  const rel = sogliaRelDi(cfg);
+  return Math.abs(r.diff) > (rel > 0 ? Math.min(+cfg.soglia || 0, (+r.target || 0)*rel/100) : (+cfg.soglia || 0));
+};
+const sogliaRelDi = cfg => cfg.sogliaRel == null ? 25 : (+cfg.sogliaRel || 0);
+
 function render(){
   const cfg = draft || config;
   const c = compute(cfg);
@@ -1015,7 +1023,8 @@ function render(){
   const soglia = +cfg.soglia || 0;
   const maxScale = Math.max(...c.rows.map(r=>Math.max(r.peso, r.target)), 1) * 1.08;
   const peggiore = [...c.rows].sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff))[0];
-  const fuori = c.rows.filter(r=>Math.abs(r.diff) > soglia).length;
+  const sogliaRel = sogliaRelDi(cfg);
+  const fuori = c.rows.filter(r=>fuoriSoglia(r, cfg)).length;
 
   const perClasse = Object.keys(CLASSI).map(k=>{
     const rs = c.rows.filter(r=>r.classe===k);
@@ -1042,14 +1051,14 @@ function render(){
   <div class="kpis">
     <div class="kpi"><span class="eyebrow">Valore totale</span><span class="v">${eur.format(c.tot)}</span><span class="s">Investiti ${eur0.format(c.costoTot)}</span></div>
     <div class="kpi"><span class="eyebrow">Guadagno / perdita</span><span class="v ${c.pl>=0?"pos":"neg"}">${signed(c.pl, v=>eur0.format(v))}</span><span class="s ${c.pl>=0?"pos":"neg"}">${signed(c.plPct, v=>n2.format(v)+" %")}</span></div>
-    <div class="kpi"><span class="eyebrow">Fuori soglia</span><span class="v">${fuori} su ${c.rows.length}</span><span class="s">Soglia ±${n2.format(soglia)} punti</span></div>
+    <div class="kpi"><span class="eyebrow">Fuori soglia</span><span class="v">${fuori} su ${c.rows.length}</span><span class="s">Soglia ±${n2.format(soglia)} punti${sogliaRel > 0 ? ` o ±${n2.format(sogliaRel)} % del target` : ""}</span></div>
     <div class="kpi"><span class="eyebrow">Scostamento maggiore</span><span class="v">${signed(peggiore.diff, v=>n2.format(v)+" pt")}</span><span class="s" title="${esc(peggiore.nome)}">${esc(peggiore.ticker || shortName(peggiore.nome))} · ${signed(peggiore.diffEur, v=>eur0.format(v))}</span></div>
   </div>
 
   ${Math.abs(c.sommaTarget-100) > 0.05 ? `<div class="warnbar">I target sommano a ${n2.format(c.sommaTarget)} %: per un confronto corretto devono fare 100 %.</div>` : ""}
 
   <section>
-    <div class="sec-head"><h2>Posizioni</h2>${draft?`<label class="field" for="in-soglia">Soglia di tolleranza ± <input id="in-soglia" class="sm" style="width:70px" type="number" min="0" step="0.5" value="${cfg.soglia}"> punti</label>`:""}</div>
+    <div class="sec-head"><h2>Posizioni</h2>${draft?`<label class="field" for="in-soglia">Soglia di tolleranza ± <input id="in-soglia" class="sm" style="width:70px" type="number" min="0" step="0.5" value="${cfg.soglia}"> punti</label><label class="field" for="in-soglia-rel">oppure ± <input id="in-soglia-rel" class="sm" style="width:70px" type="number" min="0" step="5" value="${sogliaRel}"> % del target</label>`:""}</div>
     <div class="panel tbl-wrap"><table>
       <thead><tr><th>Strumento</th><th>Quantità</th><th>P.zo medio</th><th>Prezzo</th><th>Valore</th><th>G/P</th><th>G/P %</th><th>Target %</th></tr></thead>
       <tbody>
@@ -1086,7 +1095,7 @@ function render(){
 
     <div class="panel rows">
       ${c.rows.map(r=>{
-        const out = Math.abs(r.diff) > soglia;
+        const out = fuoriSoglia(r, cfg);
         const chip = out
           ? `<span class="chip warn">${r.diff>0?"▲ Sopra":"▼ Sotto"} ${signed(r.diff, v=>n2.format(v))} pt</span>`
           : `<span class="chip ok">In linea</span>`;
@@ -3024,6 +3033,7 @@ const onAppInput = e=>{
   }
   if (!draft) return;
   if (el.id==="in-soglia"){ draft.soglia = +el.value || 0; }
+  else if (el.id==="in-soglia-rel"){ draft.sogliaRel = +el.value || 0; }
   else if (el.dataset.k){
     const s = draft.strumenti[+el.dataset.i];
     const v = el.value===""? 0 : +el.value;
