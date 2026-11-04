@@ -398,7 +398,6 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100
 .sp-per{margin:-4px 0 0}
 .bg-acc{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-weight:500}
 .bg-acc input{width:18px;height:18px;padding:0;accent-color:var(--accent)}
-.bg-row .rest .rip{color:var(--entrata);font-weight:600}
 .sh-head{align-items:center}
 .sh-tools{display:flex;align-items:center;gap:8px}
 .sh-tools .btn{padding:6px 12px}
@@ -2699,7 +2698,7 @@ function drawBudget(t, BM){
     const st = q > 1 ? "over" : q > .9 ? "warn" : "";
     return `<div class="bg-row"><span class="nm"><span class="cdot" style="background:${colCat(x.c)}"></span>${esc(x.c)}</span><span class="amt">${eur0.format(tot)} <small>di ${eur0.format(x.b)}</small></span>
       <span class="meter"><i class="m-sp ${st}" style="width:${x.s/scala*100}%;${st ? "" : "background:" + colCat(x.c)}"></i><i class="m-pv" style="width:${x.p/scala*100}%"></i></span>
-      <span class="rest ${st}">${q > 1 ? `${eur0.format(tot - x.b)} oltre il budget` : `restano ${eur0.format(x.b - tot)}`}${x.p ? ` · ${eur0.format(x.p)} di fisse in arrivo` : ""}${x.rip > 0 ? ` · <span class="rip">+${eur0.format(x.rip)} accumulati</span>` : ""}</span></div>`;
+      <span class="rest ${st}">${q > 1 ? `${eur0.format(tot - x.b)} oltre il budget` : `restano ${eur0.format(x.b - tot)}`}${x.p ? ` · ${eur0.format(x.p)} di fisse in arrivo` : ""}${x.rip > 0 ? ` (+${eur0.format(x.rip)} accumulati)` : ""}</span></div>`;
   }).join("") + (Object.keys(t.inn).length ? `<p class="in-line">Entrate: ${Object.entries(t.inn).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`${esc(c)} ${eur0.format(v)}`).join(" · ")}</p>` : "");
 }
 
